@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/example/goflux/pkg/bus"
@@ -14,11 +16,37 @@ import (
 // ErrRuntimeNotStarted is returned when an operation is performed on a runtime that has not been started.
 var ErrRuntimeNotStarted = errors.New("runtime not started")
 
+// Status represents the current status of the Runtime.
+type Status struct {
+	Reactors    []ReactorStatus
+	WorkerPool  worker.Status
+	Deployments []DeploymentStatus
+}
+
+// ReactorStatus represents the status of a single Reactor.
+type ReactorStatus struct {
+	ReactorID int
+	Status    reactor.Status
+}
+
+// DeploymentStatus represents the status of a single deployed component.
+type DeploymentStatus struct {
+	ComponentName string
+	ReactorID     int
+}
+
+// deployment tracks a deployed component and its assigned reactor.
+type deployment struct {
+	component component.Component
+	reactorID int
+}
+
 // Runtime manages the lifecycle of components, reactors, and the worker pool.
 type Runtime struct {
 	bus         bus.Bus
 	reactors    []*reactor.Reactor
 	workerPool  *worker.WorkerPool
+	deployments map[string]*deployment
 	nextReactor int
 	started     bool
 	mu          sync.RWMutex
@@ -26,10 +54,10 @@ type Runtime struct {
 
 // NewRuntime creates a new Runtime.
 type NewRuntimeOptions struct {
-	NumReactors  int
-	MailboxSize  int
-	NumWorkers   int
-	QueueSize    int
+	NumReactors int
+	MailboxSize int
+	NumWorkers  int
+	QueueSize   int
 }
 
 func NewRuntime(opts NewRuntimeOptions, b bus.Bus) *Runtime {
@@ -39,9 +67,10 @@ func NewRuntime(opts NewRuntimeOptions, b bus.Bus) *Runtime {
 	}
 
 	return &Runtime{
-		bus:        b,
-		reactors:   reactors,
-		workerPool: worker.NewWorkerPool(opts.NumWorkers, opts.QueueSize),
+		bus:         b,
+		reactors:    reactors,
+		workerPool:  worker.NewWorkerPool(opts.NumWorkers, opts.QueueSize),
+		deployments: make(map[string]*deployment),
 	}
 }
 
@@ -95,13 +124,21 @@ func (r *Runtime) Deploy(ctx context.Context, c component.Component) error {
 	}
 
 	// Assign a reactor to the component
-	reactor := r.reactors[r.nextReactor]
+	reactorID := r.nextReactor
+	reactor := r.reactors[reactorID]
 	r.nextReactor = (r.nextReactor + 1) % len(r.reactors)
 
 	// Create a bus proxy that ensures all handlers are executed on the assigned reactor.
 	busProxy := &reactorBusProxy{
 		bus:     r.bus,
 		reactor: reactor,
+	}
+
+	// Store the deployment information.
+	componentName := getComponentName(c)
+	r.deployments[componentName] = &deployment{
+		component: c,
+		reactorID: reactorID,
 	}
 
 	// Start the component on its assigned reactor and wait for it to complete.
@@ -122,6 +159,34 @@ func (r *Runtime) Deploy(ctx context.Context, c component.Component) error {
 // ExecuteBlocking executes a function on the worker pool.
 func (r *Runtime) ExecuteBlocking(f func()) error {
 	return r.workerPool.Submit(f)
+}
+
+// Status returns the current status of the runtime.
+func (r *Runtime) Status() Status {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	reactorStatuses := make([]ReactorStatus, len(r.reactors))
+	for i, reactor := range r.reactors {
+		reactorStatuses[i] = ReactorStatus{
+			ReactorID: i,
+			Status:    reactor.Status(),
+		}
+	}
+
+	deploymentStatuses := make([]DeploymentStatus, 0, len(r.deployments))
+	for name, dep := range r.deployments {
+		deploymentStatuses = append(deploymentStatuses, DeploymentStatus{
+			ComponentName: name,
+			ReactorID:     dep.reactorID,
+		})
+	}
+
+	return Status{
+		Reactors:    reactorStatuses,
+		WorkerPool:  r.workerPool.Status(),
+		Deployments: deploymentStatuses,
+	}
 }
 
 // reactorBusProxy is a proxy for the event bus that ensures all handlers are executed on a specific reactor.
@@ -156,4 +221,15 @@ func (p *reactorBusProxy) Consumer(topic string, handler bus.Handler) {
 			handler(msg)
 		})
 	})
+}
+
+// getComponentName returns a name for the given component.
+func getComponentName(c component.Component) string {
+	// This is a simple implementation that uses the type name of the component.
+	// A more robust implementation might use a custom name provider.
+	val := reflect.ValueOf(c)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	return fmt.Sprintf("%s.%s", val.Type().PkgPath(), val.Type().Name())
 }

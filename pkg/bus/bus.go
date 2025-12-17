@@ -3,7 +3,6 @@ package bus
 import (
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -63,8 +62,8 @@ type localBus struct {
 	replyHandlers map[string]Handler // a map of correlation IDs to reply handlers
 }
 
-// NewLocalBus creates a new in-process event bus.
-func NewLocalBus() Bus {
+// NewBus creates a new in-process event bus.
+func NewBus(buffer int) Bus {
 	return &localBus{
 		handlers:     make(map[string][]Handler),
 		replyHandlers: make(map[string]Handler),

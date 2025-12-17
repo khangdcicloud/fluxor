@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gemini-testing/go-react-vertx/pkg/bus"
-	"github.com/gemini-testing/go-react-vertx/pkg/component"
-	"github.com/gemini-testing/go-react-vertx/pkg/runtime"
+	"github.com/example/goflux/pkg/bus"
+	"github.com/example/goflux/pkg/component"
+	"github.com/example/goflux/pkg/runtime"
 )
 
 func TestLocalBus_Send(t *testing.T) {

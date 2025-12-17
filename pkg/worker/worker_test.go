@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini-testing/go-react-vertx/pkg/worker"
+	"github.com/example/goflux/pkg/worker"
 )
 
 func TestWorkerPool_Submit(t *testing.T) {

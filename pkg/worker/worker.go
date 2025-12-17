@@ -14,6 +14,13 @@ var (
 // Job represents a task to be executed by a worker.
 type Job func()
 
+// Status represents the current status of the WorkerPool.
+type Status struct {
+	NumWorkers    int
+	QueueSize     int
+	QueueCapacity int
+}
+
 // WorkerPool is a fixed-size pool of goroutines for executing blocking or CPU-heavy tasks.
 type WorkerPool struct {
 	jobs    chan Job
@@ -85,5 +92,14 @@ func (p *WorkerPool) Submit(job Job) error {
 		return nil
 	case <-p.stop:
 		return ErrWorkerPoolClosed
+	}
+}
+
+// Status returns the current status of the worker pool.
+func (p *WorkerPool) Status() Status {
+	return Status{
+		NumWorkers:    p.workers,
+		QueueSize:     len(p.jobs),
+		QueueCapacity: cap(p.jobs),
 	}
 }

@@ -13,6 +13,12 @@ var (
 // Event represents a task to be executed by the Reactor.
 type Event func()
 
+// Status represents the current status of the Reactor.
+type Status struct {
+	MailboxSize     int
+	MailboxCapacity int
+}
+
 // Reactor is an event loop that processes events sequentially in a single goroutine.
 type Reactor struct {
 	mailbox chan Event
@@ -78,4 +84,12 @@ func (r *Reactor) Schedule(event Event, delay time.Duration) *time.Timer {
 		// We will try to submit, but ignore backpressure errors if the reactor is shutting down.
 		_ = r.Submit(event)
 	})
+}
+
+// Status returns the current status of the reactor.
+func (r *Reactor) Status() Status {
+	return Status{
+		MailboxSize:     len(r.mailbox),
+		MailboxCapacity: cap(r.mailbox),
+	}
 }

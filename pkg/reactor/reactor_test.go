@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini-testing/go-react-vertx/pkg/reactor"
+	"github.com/example/goflux/pkg/reactor"
 )
 
 func TestReactor_SequentialExecution(t *testing.T) {
