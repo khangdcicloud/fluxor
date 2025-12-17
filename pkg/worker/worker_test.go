@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/goflux/pkg/worker"
+	"github.com/fluxor-io/fluxor/pkg/worker"
 )
 
 func TestWorkerPool_Submit(t *testing.T) {

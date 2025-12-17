@@ -6,8 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/fluxor-io/fluxor/pkg/bus"
-	"github.com/fluxor-io/fluxor/pkg/component"
+	"github.com/fluxor-io/fluxor/pkg/types"
 )
 
 var ErrRuntimeAlreadyStarted = errors.New("runtime has already been started")
@@ -29,25 +28,25 @@ type NewRuntimeOptions struct {
 }
 
 type Runtime struct {
-	bus   bus.Bus
+	bus   types.Bus
 	state uint32
-	comps map[string]component.Component
+	comps map[string]types.Component
 	mu    sync.RWMutex
 }
 
-func NewRuntime(opts NewRuntimeOptions, bus bus.Bus) *Runtime {
+func NewRuntime(opts NewRuntimeOptions, bus types.Bus) *Runtime {
 	return &Runtime{
 		bus:   bus,
-		comps: make(map[string]component.Component),
+		comps: make(map[string]types.Component),
 	}
 }
 
-func (r *Runtime) Deploy(ctx context.Context, comp component.Component) error {
+func (r *Runtime) Deploy(ctx context.Context, comp types.Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	name := comp.Name()
 	r.comps[name] = comp
-	return comp.Start(ctx, r.bus)
+	return comp.OnStart(ctx, r.bus)
 }
 
 func (r *Runtime) Start() error {
@@ -67,9 +66,9 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	var wg sync.WaitGroup
 	wg.Add(len(r.comps))
 	for _, comp := range r.comps {
-		go func(comp component.Component) {
+		go func(comp types.Component) {
 			defer wg.Done()
-			comp.Stop(ctx) // Errors are logged by the component
+			comp.OnStop(ctx) // Errors are logged by the component
 		}(comp)
 	}
 	wg.Wait()
@@ -77,4 +76,19 @@ func (r *Runtime) Stop(ctx context.Context) error {
 
 	atomic.StoreUint32(&r.state, runtimeStateStopped)
 	return nil
+}
+
+func (r *Runtime) Status() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	components := make([]string, 0, len(r.comps))
+	for name := range r.comps {
+		components = append(components, name)
+	}
+
+	return map[string]interface{}{
+		"state":      r.state,
+		"components": components,
+	}
 }

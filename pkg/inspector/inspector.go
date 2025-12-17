@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/example/fluxor/pkg/bus"
-	"github.com/example/fluxor/pkg/component"
-	"github.com/example/fluxor/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/types"
 )
 
 // Inspector is a component that provides an HTTP endpoint for inspecting the runtime.
 type Inspector struct {
-	component.Base
 	runtime *runtime.Runtime
 	addr    string
 	server  *http.Server
@@ -26,8 +24,12 @@ func NewInspector(addr string, rt *runtime.Runtime) *Inspector {
 	}
 }
 
+func (i *Inspector) Name() string {
+	return "inspector"
+}
+
 // OnStart starts the inspector's HTTP server.
-func (i *Inspector) OnStart(ctx context.Context, b bus.Bus) {
+func (i *Inspector) OnStart(ctx context.Context, b types.Bus) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", i.handleStatus)
 
@@ -36,18 +38,20 @@ func (i *Inspector) OnStart(ctx context.Context, b bus.Bus) {
 		Handler: mux,
 	}
 
-	i.Go(func() {
+	go func() {
 		if err := i.server.ListenAndServe(); err != http.ErrServerClosed {
 			// log error
 		}
-	})
+	}()
+	return nil
 }
 
 // OnStop gracefully shuts down the inspector's HTTP server.
-func (i *Inspector) OnStop(ctx context.Context) {
+func (i *Inspector) OnStop(ctx context.Context) error {
 	if i.server != nil {
-		i.server.Shutdown(ctx)
+		return i.server.Shutdown(ctx)
 	}
+	return nil
 }
 
 // handleStatus returns the runtime's status as JSON.

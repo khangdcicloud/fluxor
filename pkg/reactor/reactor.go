@@ -3,13 +3,13 @@ package reactor
 import (
 	"context"
 
-	"github.com/fluxor-io/fluxor/pkg/component"
+	"github.com/fluxor-io/fluxor/pkg/types"
 )
 
 type Reactor struct {
-	component.Base
 	name    string
 	mailbox chan func()
+	bus     types.Bus
 }
 
 func NewReactor(name string, size int) *Reactor {
@@ -20,8 +20,18 @@ func NewReactor(name string, size int) *Reactor {
 	return r
 }
 
-func (r *Reactor) OnStart(ctx context.Context, bus any) {
-	r.Go(r.loop)
+func (r *Reactor) Name() string {
+	return r.name
+}
+
+func (r *Reactor) OnStart(ctx context.Context, bus types.Bus) error {
+	r.bus = bus
+	go r.loop(ctx)
+	return nil
+}
+
+func (r *Reactor) OnStop(ctx context.Context) error {
+	return nil
 }
 
 func (r *Reactor) Execute(fn func()) {

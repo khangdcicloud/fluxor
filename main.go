@@ -24,7 +24,9 @@ func main() {
 	rt := runtime.NewRuntime(opts, b)
 
 	// Start the runtime.
-	rt.Start()
+	if err := rt.Start(); err != nil {
+		panic(err)
+	}
 
 	// Create and deploy the inspector.
 	inspector := inspector.NewInspector(":8080", rt)
@@ -40,5 +42,7 @@ func main() {
 	// Shut down the runtime gracefully.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	rt.Stop(ctx)
+	if err := rt.Stop(ctx); err != nil {
+		panic(err)
+	}
 }

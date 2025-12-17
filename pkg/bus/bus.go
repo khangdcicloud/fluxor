@@ -11,12 +11,7 @@ import (
 )
 
 type Bus interface {
-	Publish(topic string, msg types.Message)
-	Subscribe(topic string, handler types.Mailbox) error
-	Unsubscribe(topic string, handler types.Mailbox) error
-
-	Send(topic string, msg types.Message) error
-	Request(ctx context.Context, topic string, msg types.Message) (types.Message, error)
+	types.Bus
 }
 
 type localBus struct {
