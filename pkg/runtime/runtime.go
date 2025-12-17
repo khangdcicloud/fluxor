@@ -21,6 +21,13 @@ const (
 	runtimeStateStopped
 )
 
+type NewRuntimeOptions struct {
+	NumReactors int
+	MailboxSize int
+	NumWorkers  int
+	QueueSize   int
+}
+
 type Runtime struct {
 	bus   bus.Bus
 	state uint32
@@ -28,36 +35,25 @@ type Runtime struct {
 	mu    sync.RWMutex
 }
 
-func NewRuntime(bus bus.Bus) *Runtime {
+func NewRuntime(opts NewRuntimeOptions, bus bus.Bus) *Runtime {
 	return &Runtime{
 		bus:   bus,
 		comps: make(map[string]component.Component),
 	}
 }
 
-func (r *Runtime) Register(name string, comp component.Component) {
+func (r *Runtime) Deploy(ctx context.Context, comp component.Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	name := comp.Name()
 	r.comps[name] = comp
+	return comp.Start(ctx, r.bus)
 }
 
-func (r *Runtime) Start(ctx context.Context) error {
+func (r *Runtime) Start() error {
 	if !atomic.CompareAndSwapUint32(&r.state, runtimeStateIdle, runtimeStateStarting) {
 		return ErrRuntimeAlreadyStarted
 	}
-
-	r.mu.RLock()
-	var wg sync.WaitGroup
-	wg.Add(len(r.comps))
-	for _, comp := range r.comps {
-		go func(comp component.Component) {
-			defer wg.Done()
-			comp.Start(ctx, r.bus) // Errors are logged by the component
-		}(comp)
-	}
-	wg.Wait()
-	r.mu.RUnlock()
-
 	atomic.StoreUint32(&r.state, runtimeStateStarted)
 	return nil
 }

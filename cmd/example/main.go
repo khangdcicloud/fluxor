@@ -10,18 +10,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/fluxor/pkg/bus"
-	"github.com/example/fluxor/pkg/component"
-	"github.com/example/fluxor/pkg/httpx"
-	"github.com/example/fluxor/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/component"
+	"github.com/fluxor-io/fluxor/pkg/httpx"
+	"github.com/fluxor-io/fluxor/pkg/runtime"
 )
 
 // GreeterComponent is a simple component that greets people.
-type GreeterComponent struct{}
+type GreeterComponent struct{
+	component.Base
+}
 
-func (c *GreeterComponent) Start(ctx context.Context, b bus.Bus) error {
+func (c *GreeterComponent) Name() string {
+	return "greeter"
+}
+
+func (c *GreeterComponent) OnStart(ctx context.Context, b bus.Bus) error {
 	log.Println("GreeterComponent starting")
-	b.Consumer("greeter.hello", func(msg bus.Message) {
+	b.Subscribe("greeter.hello", func(msg bus.Message) {
 		name := msg.Payload.(string)
 		log.Printf("GreeterComponent received request: %s\n", name)
 		msg.Reply(fmt.Sprintf("Hello, %s!", name))
@@ -29,17 +35,18 @@ func (c *GreeterComponent) Start(ctx context.Context, b bus.Bus) error {
 	return nil
 }
 
-func (c *GreeterComponent) Stop(ctx context.Context) error {
-	log.Println("GreeterComponent stopping")
-	return nil
+// BlockingComponent is a component that performs a blocking operation.
+type BlockingComponent struct{
+	component.Base
 }
 
-// BlockingComponent is a component that performs a blocking operation.
-type BlockingComponent struct{}
+func (c *BlockingComponent) Name() string {
+	return "blocking"
+}
 
-func (c *BlockingComponent) Start(ctx context.Context, b bus.Bus) error {
+func (c *BlockingComponent) OnStart(ctx context.Context, b bus.Bus) error {
 	log.Println("BlockingComponent starting")
-	b.Consumer("blocking.long_operation", func(msg bus.Message) {
+	b.Subscribe("blocking.long_operation", func(msg bus.Message) {
 		log.Println("BlockingComponent received request")
 		// Simulate a long-running blocking operation.
 		time.Sleep(2 * time.Second)
@@ -48,20 +55,15 @@ func (c *BlockingComponent) Start(ctx context.Context, b bus.Bus) error {
 	return nil
 }
 
-func (c *BlockingComponent) Stop(ctx context.Context) error {
-	log.Println("BlockingComponent stopping")
-	return nil
-}
-
 func main() {
 	// Create a new event bus.
-	b := bus.NewLocalBus()
+	b := bus.NewBus(1024)
 
 	// Create a new runtime.
 	rt := runtime.NewRuntime(runtime.NewRuntimeOptions{
-		NumReactors: 4,       // 4 CPU-bound reactors
+		NumReactors: 4, // 4 CPU-bound reactors
 		MailboxSize: 1024,
-		NumWorkers:  128,     // A large pool for blocking I/O
+		NumWorkers:  128,   // A large pool for blocking I/O
 		QueueSize:   65536,
 	}, b)
 
@@ -78,26 +80,30 @@ func main() {
 	}
 
 	// Create a new HTTP server.
-	httpServer := httpx.NewServer(":8080", b)
+	httpServer := httpx.NewServer(8080, nil, b)
 
 	// Register the HTTP handlers.
-	httpServer.Handle("/greet", func(b bus.Bus, w http.ResponseWriter, r *http.Request) {
+	httpServer.Get("/greet", func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		if name == "" {
 			name = "World"
 		}
 
-		b.Request(bus.Message{Topic: "greeter.hello", Payload: name}, func(reply bus.Message) {
-			fmt.Fprintln(w, reply.Payload)
-		})
+		reply, err := b.Request(r.Context(), "greeter.hello", bus.Message{Payload: name})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, reply.Payload)
 	})
 
-	httpServer.Handle("/blocking", func(b bus.Bus, w http.ResponseWriter, r *http.Request) {
-		rt.ExecuteBlocking(func() {
-			b.Request(bus.Message{Topic: "blocking.long_operation"}, func(reply bus.Message) {
-				fmt.Fprintln(w, reply.Payload)
-			})
-		})
+	httpServer.Get("/blocking", func(w http.ResponseWriter, r *http.Request) {
+		reply, err := b.Request(r.Context(), "blocking.long_operation", bus.Message{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, reply.Payload)
 	})
 
 	// Start the HTTP server.
