@@ -1,136 +1,111 @@
 package bus
 
 import (
+	"context"
 	"errors"
+	"log"
 	"sync"
 
+	"github.com/fluxor-io/fluxor/pkg/types"
 	"github.com/google/uuid"
 )
 
-var (
-	// ErrNoHandler is returned when a message is sent to a topic with no registered handlers.
-	ErrNoHandler = errors.New("no handler for topic")
-	// ErrRequestTimeout is returned when a request-reply operation times out.
-	ErrRequestTimeout = errors.New("request timed out")
-)
-
-// Message represents a message on the event bus.
-type Message struct {
-	Topic         string
-	Payload       interface{}
-	CorrelationID string
-	ReplyTo       string
-	Headers       map[string]string
-
-	// isReply is an internal flag to indicate if the message is a reply.
-	isReply bool
-}
-
-// Reply creates a reply message for the given payload.
-func (m *Message) Reply(payload interface{}) Message {
-	return Message{
-		Topic:         m.ReplyTo,
-		Payload:       payload,
-		CorrelationID: m.CorrelationID,
-		Headers:       m.Headers,
-		isReply:       true,
-	}
-}
-
-// Handler is a function that processes messages.
-type Handler func(msg Message)
-
-// Bus is the interface for the event bus.
 type Bus interface {
-	// Publish sends a message to all subscribers of a topic.
-	Publish(msg Message)
+	Publish(topic string, msg types.Message)
+	Subscribe(topic string, handler types.Mailbox) error
+	Unsubscribe(topic string, handler types.Mailbox) error
 
-	// Send sends a message to a single subscriber of a topic (point-to-point).
-	Send(msg Message) error
-
-	// Request sends a request and invokes the replyHandler when a reply is received.
-	Request(msg Message, replyHandler Handler)
-
-	// Consumer registers a handler for a topic.
-	Consumer(topic string, handler Handler)
+	Send(topic string, msg types.Message) error
+	Request(ctx context.Context, topic string, msg types.Message) (types.Message, error)
 }
 
-// localBus is an in-process event bus.
 type localBus struct {
-	mu           sync.RWMutex
-	handlers     map[string][]Handler
-	replyHandlers map[string]Handler // a map of correlation IDs to reply handlers
+	subscribers map[string][]types.Mailbox
+	mu          sync.RWMutex
+	capacity    int
 }
 
-// NewBus creates a new in-process event bus.
-func NewBus(buffer int) Bus {
+func NewBus(capacity int) Bus {
 	return &localBus{
-		handlers:     make(map[string][]Handler),
-		replyHandlers: make(map[string]Handler),
+		subscribers: make(map[string][]types.Mailbox),
+		capacity:    capacity,
 	}
 }
 
-// handle routes a message to the appropriate handler(s).
-func (b *localBus) handle(msg Message) error {
+func (b *localBus) Publish(topic string, msg types.Message) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	// If it's a reply, find the specific reply handler.
-	if msg.isReply {
-		if handler, ok := b.replyHandlers[msg.CorrelationID]; ok {
-			// Execute the handler and remove it.
-			// This is happening in the sender's reactor, which is what we want.
-			go func() {
-				handler(msg)
-				b.mu.Lock()
-				delete(b.replyHandlers, msg.CorrelationID)
-				b.mu.Unlock()
-			}()
-			return nil
+	if subscribers, ok := b.subscribers[topic]; ok {
+		for _, sub := range subscribers {
+			// Non-blocking send
+			select {
+			case sub <- msg:
+			default:
+				log.Printf("Failed to publish message to topic %s: subscriber channel is full", topic)
+			}
 		}
-		return nil // No-op if no reply handler is found (e.g., timeout already occurred)
 	}
+}
 
-	// If it's a regular message, find the topic handlers.
-	if handlers, ok := b.handlers[msg.Topic]; ok && len(handlers) > 0 {
-		// For Send, deliver to one. For Publish, deliver to all.
-		// (This simple implementation delivers to the first for Send)
-		for _, handler := range handlers {
-			handler(msg)
+func (b *localBus) Subscribe(topic string, handler types.Mailbox) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.subscribers[topic] = append(b.subscribers[topic], handler)
+	return nil
+}
+
+func (b *localBus) Unsubscribe(topic string, handler types.Mailbox) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if subscribers, ok := b.subscribers[topic]; ok {
+		for i, sub := range subscribers {
+			if sub == handler {
+				b.subscribers[topic] = append(subscribers[:i], subscribers[i+1:]...)
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (b *localBus) Send(topic string, msg types.Message) error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	if subscribers, ok := b.subscribers[topic]; ok {
+		for _, sub := range subscribers {
+			sub <- msg
 		}
 		return nil
 	}
-
-	return ErrNoHandler
+	return errors.New("no subscribers for topic: " + topic)
 }
 
-func (b *localBus) Publish(msg Message) {
-	b.handle(msg)
+func (b *localBus) Request(ctx context.Context, topic string, msg types.Message) (types.Message, error) {
+	replyTopic := newReplyTopic()
+	msg.ReplyTo = replyTopic
+
+	replyMailbox := make(types.Mailbox, 1)
+	if err := b.Subscribe(replyTopic, replyMailbox); err != nil {
+		return types.Message{}, err
+	}
+	defer b.Unsubscribe(replyTopic, replyMailbox)
+
+	if err := b.Send(topic, msg); err != nil {
+		return types.Message{}, err
+	}
+
+	select {
+	case reply := <-replyMailbox:
+		return reply, nil
+	case <-ctx.Done():
+		return types.Message{}, ctx.Err()
+	}
 }
 
-func (b *localBus) Send(msg Message) error {
-	return b.handle(msg)
-}
-
-func (b *localBus) Request(msg Message, replyHandler Handler) {
-	// Generate a unique correlation ID.
-	msg.CorrelationID = uuid.NewString()
-	// The reply topic is the same correlation ID for simplicity.
-	msg.ReplyTo = msg.CorrelationID
-
-	b.mu.Lock()
-	b.replyHandlers[msg.CorrelationID] = replyHandler
-	b.mu.Unlock()
-
-	// The message is sent like any other message.
-	b.handle(msg)
-
-	// TODO: Handle timeouts. A real implementation would need a mechanism
-	// to clean up the reply handler if a reply is not received within a certain time.
-}
-
-func (b *localBus) Consumer(topic string, handler Handler) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.handlers[topic] = append(b.handlers[topic], handler)
+func newReplyTopic() string {
+	return "reply." + uuid.New().String()
 }

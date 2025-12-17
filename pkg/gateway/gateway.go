@@ -2,27 +2,32 @@ package gateway
 
 import (
 	"context"
-	"github.com/example/goflux/pkg/bus"
-	"github.com/example/goflux/pkg/httpx"
-	"github.com/example/goflux/pkg/reactor"
+	"fmt"
 	"log"
+
+	"github.com/fluxor-io/fluxor/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/httpx"
+	"github.com/fluxor-io/fluxor/pkg/reactor"
 )
 
 type Gateway struct {
 	server *httpx.Server
+	port   int
 }
 
-func NewGateway(reactor *reactor.Reactor, bus bus.Bus) *Gateway {
-	g := &Gateway{}
+func NewGateway(port int, reactor *reactor.Reactor, bus bus.Bus) *Gateway {
+	g := &Gateway{
+		port: port,
+	}
 
 	// Use httpx.NewServer from our shared package
-	g.server = httpx.NewServer(8080, reactor, bus)
+	g.server = httpx.NewServer(port, reactor, bus)
 
 	return g
 }
 
 func (g *Gateway) Start(ctx context.Context) error {
-	log.Println("Starting gateway server on :8080")
+	log.Println(fmt.Sprintf("Starting gateway server on :%d", g.port))
 	g.server.Start()
 	return nil
 }

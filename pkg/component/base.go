@@ -5,15 +5,17 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/example/goflux/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/bus"
 )
 
 // Base is a helper struct that provides a robust implementation of the Component interface.
 // It is intended to be embedded in other components to provide common lifecycle management
 // and goroutine supervision.
 type Base struct {
-	wg      sync.WaitGroup
-	running uint32 // atomic
+	wg         sync.WaitGroup
+	running    uint32 // atomic
+	stopCtx    context.Context
+	stopCancel context.CancelFunc
 }
 
 // Start is called by the runtime to start the component.
@@ -24,6 +26,7 @@ func (b *Base) Start(ctx context.Context, bus bus.Bus) error {
 		// Already running
 		return nil
 	}
+	b.stopCtx, b.stopCancel = context.WithCancel(context.Background())
 	b.OnStart(ctx, bus)
 	return nil
 }
@@ -37,6 +40,7 @@ func (b *Base) Stop(ctx context.Context) error {
 		// Already stopped
 		return nil
 	}
+	b.stopCancel()
 	b.OnStop(ctx)
 	b.wg.Wait()
 	return nil
@@ -56,10 +60,10 @@ func (b *Base) OnStop(ctx context.Context) {
 
 // Go starts a new goroutine that is supervised by the component.
 // The component's Stop method will wait for all supervised goroutines to complete.
-func (b *Base) Go(f func()) {
+func (b *Base) Go(f func(ctx context.Context)) {
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
-		f()
+		f(b.stopCtx)
 	}()
 }

@@ -7,9 +7,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/fluxor/pkg/bus"
-	"github.com/example/fluxor/pkg/inspector"
-	"github.com/example/fluxor/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/inspector"
+	"github.com/fluxor-io/fluxor/pkg/runtime"
 )
 
 func main() {

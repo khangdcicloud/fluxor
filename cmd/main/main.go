@@ -8,22 +8,25 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/example/goflux/pkg/bus"
-	"github.com/example/goflux/pkg/component"
-	"github.com/example/goflux/pkg/gateway"
-	"github.com/example/goflux/pkg/httpx"
-	"github.com/example/goflux/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/component"
+	"github.com/fluxor-io/fluxor/pkg/httpx"
+	"github.com/fluxor-io/fluxor/pkg/runtime"
 )
 
+// GreeterService is a simple service that greets the world.
 type GreeterService struct {
 	component.Base
 	bus bus.Bus
 }
 
-func (g *GreeterService) Start(ctx context.Context) error {
+// OnStart is called when the component is started.
+func (g *GreeterService) OnStart(ctx context.Context, b bus.Bus) {
+	g.bus = b
 	g.bus.Consumer("/greet", g.handleGreet)
-	return nil
+	log.Println("GreeterService started")
 }
 
 func (g *GreeterService) handleGreet(msg bus.Message) {
@@ -35,6 +38,8 @@ func (g *GreeterService) handleGreet(msg bus.Message) {
 	}
 
 	if msg.ReplyTo != "" {
+		// In a real application, you would not want to block the consumer goroutine.
+		// Instead, you would send the reply asynchronously.
 		g.bus.Send(msg.ReplyTo, bus.Message{
 			Payload:       fmt.Sprintf("hello %s", name),
 			CorrelationID: msg.CorrelationID,
@@ -42,38 +47,39 @@ func (g *GreeterService) handleGreet(msg bus.Message) {
 	}
 }
 
-func (g *GreeterService) Stop(ctx context.Context) error {
-	return nil
-}
-
 func main() {
+	// Create a new in-process event bus.
+	b := bus.NewBus()
+
+	// Create a new runtime.
+	rt := runtime.NewRuntime(b)
+
+	// Register components.
+	rt.Register("gateway", httpx.NewServer(8080, b))
+	rt.Register("greeter", &GreeterService{})
+
+	// Start the runtime.
 	ctx, cancel := context.WithCancel(context.Background())
-
-	rt := runtime.NewRuntime(4, 1024) // 4 reactors
-	rt.Start()
-
-	// Deploy gateway component
-	gw := gateway.NewGateway(rt.ReactorForKey("gateway"), rt.Bus())
-	_, err := rt.Deploy(gw, component.DeployOptions{Name: "gateway", Key: "gateway"})
-	if err != nil {
-		log.Fatalf("Failed to deploy gateway: %v", err)
+	defer cancel()
+	if err := rt.Start(ctx); err != nil {
+		log.Fatalf("failed to start runtime: %v", err)
 	}
 
-	// Deploy the greeter service
-	_, err = rt.Deploy(&GreeterService{bus: rt.Bus()}, component.DeployOptions{Name: "greeter"})
-	if err != nil {
-		log.Fatalf("Failed to deploy greeter service: %v", err)
+	log.Println("Runtime started")
+
+	// Wait for a signal to stop the runtime.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	log.Println("Shutting down...")
+
+	// Stop the runtime gracefully.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := rt.Stop(shutdownCtx); err != nil {
+		log.Fatalf("failed to stop runtime: %v", err)
 	}
 
-	fmt.Println("Application started. Try sending requests to http://localhost:8080/greet?name=gopher")
-
-	// Wait for shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-
-	fmt.Println("Shutting down...")
-	cancel()
-	rt.Stop(ctx)
-	log.Println("Shut down gracefully")
+	log.Println("Runtime stopped")
 }

@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/goflux/pkg/bus"
-	"github.com/example/goflux/pkg/component"
-	"github.com/example/goflux/pkg/httpx"
-	"github.com/example/goflux/pkg/runtime"
+	"github.com/example/fluxor/pkg/bus"
+	"github.com/example/fluxor/pkg/component"
+	"github.com/example/fluxor/pkg/httpx"
+	"github.com/example/fluxor/pkg/runtime"
 )
 
 // GreeterComponent is a simple component that greets people.

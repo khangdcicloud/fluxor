@@ -2,112 +2,100 @@ package bus_test
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 	"testing"
+	"time"
 
-	"github.com/example/goflux/pkg/bus"
-	"github.com/example/goflux/pkg/component"
-	"github.com/example/goflux/pkg/runtime"
+	"github.com/fluxor-io/fluxor/pkg/bus"
+	"github.com/fluxor-io/fluxor/pkg/types"
 )
 
-func TestLocalBus_Send(t *testing.T) {
-	b := bus.NewLocalBus()
-	var wg sync.WaitGroup
-	wg.Add(1)
+func TestBus(t *testing.T) {
+	b := bus.NewBus(10)
 
-	var receivedPayload interface{}
-	b.Consumer("test.topic", func(msg bus.Message) {
-		receivedPayload = msg.Payload
-		wg.Done()
-	})
+	topic := "test-topic"
+	msg := types.NewMessage(topic, "hello")
 
-	b.Send(bus.Message{Topic: "test.topic", Payload: "hello"})
+	handler1 := make(types.Mailbox, 1)
+	handler2 := make(types.Mailbox, 1)
 
-	wg.Wait()
+	if err := b.Subscribe(topic, handler1); err != nil {
+		t.Fatalf("failed to subscribe handler1: %v", err)
+	}
 
-	if receivedPayload != "hello" {
-		t.Errorf("Expected payload 'hello', but got '%v'", receivedPayload)
+	if err := b.Subscribe(topic, handler2); err != nil {
+		t.Fatalf("failed to subscribe handler2: %v", err)
+	}
+
+	b.Publish(topic, msg)
+
+	// Check if both handlers received the message
+	for i := 0; i < 2; i++ {
+		select {
+		case receivedMsg := <-handler1:
+			if receivedMsg.ID != msg.ID {
+				t.Errorf("handler1 received wrong message ID: got %s, want %s", receivedMsg.ID, msg.ID)
+			}
+		case receivedMsg := <-handler2:
+			if receivedMsg.ID != msg.ID {
+				t.Errorf("handler2 received wrong message ID: got %s, want %s", receivedMsg.ID, msg.ID)
+			}
+		default:
+			t.Fatal("expected a message but got none")
+		}
+	}
+
+	if err := b.Unsubscribe(topic, handler1); err != nil {
+		t.Fatalf("failed to unsubscribe handler1: %v", err)
+	}
+
+	b.Publish(topic, msg)
+
+	// Check if only handler2 received the message
+	select {
+	case <-handler1:
+		t.Fatal("handler1 received message after unsubscribe")
+	case receivedMsg := <-handler2:
+		if receivedMsg.ID != msg.ID {
+			t.Errorf("handler2 received wrong message ID: got %s, want %s", receivedMsg.ID, msg.ID)
+		}
+	default:
+		t.Fatal("expected a message but got none")
 	}
 }
 
-func TestLocalBus_Publish(t *testing.T) {
-	b := bus.NewLocalBus()
-	var counter int32
-	var wg sync.WaitGroup
-	wg.Add(2)
+func TestRequest(t *testing.T) {
+	b := bus.NewBus(10)
 
-	b.Consumer("test.topic", func(msg bus.Message) {
-		atomic.AddInt32(&counter, 1)
-		wg.Done()
-	})
-	b.Consumer("test.topic", func(msg bus.Message) {
-		atomic.AddInt32(&counter, 1)
-		wg.Done()
-	})
+	topic := "test-request-topic"
+	requestMsg := types.NewMessage(topic, "request")
 
-	b.Publish(bus.Message{Topic: "test.topic", Payload: "hello"})
-
-	wg.Wait()
-
-	if atomic.LoadInt32(&counter) != 2 {
-		t.Errorf("Expected counter to be 2, but got %d", atomic.LoadInt32(&counter))
-	}
-}
-
-func TestLocalBus_RequestReply(t *testing.T) {
-	b := bus.NewLocalBus()
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	b.Consumer("test.request", func(msg bus.Message) {
-		msg.Reply("pong")
-	})
-
-	var replyPayload interface{}
-	b.Request(bus.Message{Topic: "test.request", Payload: "ping"}, func(reply bus.Message) {
-		replyPayload = reply.Payload
-		wg.Done()
-	})
-
-	wg.Wait()
-
-	if replyPayload != "pong" {
-		t.Errorf("Expected reply 'pong', but got '%v'", replyPayload)
-	}
-}
-
-func TestLocalBus_HandlerOnReactor(t *testing.T) {
-	b := bus.NewLocalBus()
-	rt := runtime.NewRuntime(runtime.NewRuntimeOptions{NumReactors: 1, MailboxSize: 10}, b)
-	rt.Start()
-	defer rt.Stop(context.Background())
-
-	// A dummy component to get a reactor-backed bus proxy
-	type testComponent struct {
-		component.Base
-		bus      bus.Bus
-		received chan struct{}
+	// Create a handler that will reply to the request
+	handler := make(types.Mailbox, 1)
+	if err := b.Subscribe(topic, handler); err != nil {
+		t.Fatalf("failed to subscribe handler: %v", err)
 	}
 
-	// Start is called by the runtime and sets up the component.
-	func (c *testComponent) Start(ctx context.Context, b bus.Bus) error {
-		c.bus = b
-		c.bus.Consumer("test.topic", func(msg bus.Message) {
-			// We can't easily assert we're on the right goroutine, but we can be reasonably sure
-			// the reactor is working if the message is received.
-			close(c.received)
-		})
-		return nil
+	go func() {
+		for msg := range handler {
+			replyMsg := types.NewMessage(msg.ReplyTo, "response")
+			replyMsg.CorrelationID = msg.ID
+			b.Publish(msg.ReplyTo, replyMsg)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	reply, err := b.Request(ctx, topic, requestMsg)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
 	}
 
-	c := &testComponent{received: make(chan struct{})}
-
-	if err := rt.Deploy(context.Background(), c); err != nil {
-		t.Fatalf("Deploy failed: %v", err)
+	if reply.CorrelationID != requestMsg.ID {
+		t.Errorf("unexpected correlation ID. got %q, want %q", reply.CorrelationID, requestMsg.ID)
 	}
 
-	b.Send(bus.Message{Topic: "test.topic"})
-
-	<-c.received
+	if reply.Payload != "response" {
+		t.Errorf("unexpected payload. got %q, want %q", reply.Payload, "response")
+	}
 }

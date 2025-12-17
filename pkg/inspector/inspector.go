@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/example/goflux/pkg/bus"
-	"github.com/example/goflux/pkg/component"
-	"github.com/example/goflux/pkg/runtime"
+	"github.com/example/fluxor/pkg/bus"
+	"github.com/example/fluxor/pkg/component"
+	"github.com/example/fluxor/pkg/runtime"
 )
 
 // Inspector is a component that provides an HTTP endpoint for inspecting the runtime.
