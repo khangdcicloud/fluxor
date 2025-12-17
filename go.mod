@@ -1,4 +1,4 @@
-module github.com/example/goflux
+module github.com/example/fluxor
 
 go 1.24.0
 
