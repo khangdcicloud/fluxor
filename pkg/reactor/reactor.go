@@ -6,82 +6,76 @@ import (
 	"time"
 )
 
-var ErrBackpressure = errors.New("backpressure: queue full")
+var (
+	ErrBackpressure = errors.New("reactor mailbox is full")
+)
 
+// Event represents a task to be executed by the Reactor.
+type Event func()
+
+// Reactor is an event loop that processes events sequentially in a single goroutine.
 type Reactor struct {
-	mailbox chan func()
+	mailbox chan Event
+	stop    chan struct{}
 }
 
-type ReactorOptions struct {
-	MailboxSize int
-}
-
-func NewReactor(opts ReactorOptions) *Reactor {
-	if opts.MailboxSize <= 0 {
-		opts.MailboxSize = 1024 // Default mailbox size
-	}
+// NewReactor creates a new Reactor with a given mailbox size.
+func NewReactor(mailboxSize int) *Reactor {
 	return &Reactor{
-		mailbox: make(chan func(), opts.MailboxSize),
+		mailbox: make(chan Event, mailboxSize),
+		stop:    make(chan struct{}),
 	}
 }
 
+// Start begins the reactor's event loop.
 func (r *Reactor) Start() {
 	go r.run()
 }
 
-func (r *Reactor) run() {
-	for fn := range r.mailbox {
-		fn()
+// Stop gracefully stops the reactor. It waits for all pending events to be processed.
+func (r *Reactor) Stop(ctx context.Context) {
+	// Send a stop signal which will be processed after all other events.
+	r.Submit(func() {
+		close(r.stop)
+	})
+
+	// Wait for the stop signal to be processed or for the context to be done.
+	select {
+	case <-r.stop:
+		// reactor has stopped
+	case <-ctx.Done():
+		// timeout waiting for reactor to stop
 	}
 }
 
-func (r *Reactor) Stop(ctx context.Context) error {
-	close(r.mailbox)
-	return nil
+// run is the reactor's event loop.
+func (r *Reactor) run() {
+	for {
+		select {
+		case event := <-r.mailbox:
+			event()
+		case <-r.stop:
+			return
+		}
+	}
 }
 
-func (r *Reactor) Post(fn func()) error {
+// Submit sends an event to the reactor's mailbox for processing.
+// It returns ErrBackpressure if the mailbox is full.
+func (r *Reactor) Submit(event Event) error {
 	select {
-	case r.mailbox <- fn:
+	case r.mailbox <- event:
 		return nil
 	default:
 		return ErrBackpressure
 	}
 }
 
-func (r *Reactor) PostTimeout(d time.Duration, fn func()) error {
-	timer := time.NewTimer(d)
-	select {
-	case r.mailbox <- fn:
-		timer.Stop()
-		return nil
-	case <-timer.C:
-		return ErrBackpressure
-	}
-}
-
-func (r *Reactor) SetTimer(d time.Duration, fn func()) func() {
-	timer := time.NewTimer(d)
-	go func() {
-		<-timer.C
-		r.Post(fn)
-	}()
-	return func() { timer.Stop() }
-}
-
-func (r *Reactor) SetPeriodic(d time.Duration, fn func()) func() {
-	ticker := time.NewTicker(d)
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				r.Post(fn)
-			case <-done:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	return func() { close(done) }
+// Schedule submits an event to be executed after a specified duration.
+func (r *Reactor) Schedule(event Event, delay time.Duration) *time.Timer {
+	return time.AfterFunc(delay, func() {
+		// It's possible for this to be called after the reactor is stopped.
+		// We will try to submit, but ignore backpressure errors if the reactor is shutting down.
+		_ = r.Submit(event)
+	})
 }

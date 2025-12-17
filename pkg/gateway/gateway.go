@@ -2,53 +2,32 @@ package gateway
 
 import (
 	"context"
-	"fmt"
-	"github.com/example/goreactor/pkg/httpx"
+	"github.com/example/goflux/pkg/bus"
+	"github.com/example/goflux/pkg/httpx"
+	"github.com/example/goflux/pkg/reactor"
 	"log"
-	"net/http"
-	"time"
 )
 
 type Gateway struct {
-	server *http.Server
+	server *httpx.Server
 }
 
-func NewGateway() *Gateway {
+func NewGateway(reactor *reactor.Reactor, bus bus.Bus) *Gateway {
 	g := &Gateway{}
 
-	// Use httpx.NewHandler from our shared package
-	handler := httpx.NewHandler(g.handleRequest)
-
-	g.server = &http.Server{
-		Addr:    ":8080",
-		Handler: handler,
-	}
+	// Use httpx.NewServer from our shared package
+	g.server = httpx.NewServer(8080, reactor, bus)
 
 	return g
 }
 
 func (g *Gateway) Start(ctx context.Context) error {
 	log.Println("Starting gateway server on :8080")
-	go func() {
-		if err := g.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not start gateway server: %v", err)
-		}
-	}()
+	g.server.Start()
 	return nil
 }
 
 func (g *Gateway) Stop(ctx context.Context) error {
 	log.Println("Stopping gateway server")
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	return g.server.Shutdown(ctx)
-}
-
-func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request: %s %s", r.Method, r.URL.Path)
-	// Simple echo response for now
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Hello from the gateway!")
+	return g.server.Stop(ctx)
 }

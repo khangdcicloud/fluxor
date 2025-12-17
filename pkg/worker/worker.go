@@ -3,75 +3,87 @@ package worker
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 var (
-	ErrBackpressure = errors.New("worker queue is full")
+	ErrWorkerPoolClosed = errors.New("worker pool is closed")
+	ErrNoWorkers        = errors.New("worker pool has no workers")
 )
 
-type job struct {
-	ctx context.Context
-	fn  func(context.Context) (any, error)
-	ret chan<- result
+// Job represents a task to be executed by a worker.
+type Job func()
+
+// WorkerPool is a fixed-size pool of goroutines for executing blocking or CPU-heavy tasks.
+type WorkerPool struct {
+	jobs    chan Job
+	stop    chan struct{}
+	workers int
+	wg      sync.WaitGroup
 }
 
-type result struct {
-	val any
-	err error
+// NewWorkerPool creates a new WorkerPool with a given number of workers and job queue size.
+func NewWorkerPool(workers int, queueSize int) *WorkerPool {
+	if workers <= 0 {
+		panic("number of workers must be positive")
+	}
+	return &WorkerPool{
+		jobs:    make(chan Job, queueSize),
+		stop:    make(chan struct{}),
+		workers: workers,
+	}
 }
 
-type Pool struct {
-	jobs chan job
-	stop chan struct{}
+// Start initializes the workers in the pool.
+func (p *WorkerPool) Start() {
+	p.wg.Add(p.workers)
+	for i := 0; i < p.workers; i++ {
+		go p.run()
+	}
 }
 
-func NewPool(size int, queue int) *Pool {
-	if size <= 0 {
-		size = 1
-	}
-	if queue <= 0 {
-		queue = 128
-	}
+// Stop gracefully stops the worker pool, waiting for all active jobs to complete.
+func (p *WorkerPool) Stop(ctx context.Context) {
+	close(p.jobs) // Stop accepting new jobs
+	close(p.stop)
 
-	p := &Pool{
-		jobs: make(chan job, queue),
-		stop: make(chan struct{}),
-	}
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
 
-	for i := 0; i < size; i++ {
-		go p.worker()
+	select {
+	case <-done:
+		// all workers have stopped
+	case <-ctx.Done():
+		// timeout waiting for workers to stop
 	}
-
-	return p
 }
 
-func (p *Pool) worker() {
+// run is the worker's execution loop.
+func (p *WorkerPool) run() {
+	defer p.wg.Done()
 	for {
 		select {
-		case j := <-p.jobs:
-			val, err := j.fn(j.ctx)
-			j.ret <- result{val, err}
+		case job, ok := <-p.jobs:
+			if !ok {
+				return // jobs channel closed
+			}
+			job()
 		case <-p.stop:
 			return
 		}
 	}
 }
 
-func (p *Pool) Stop() {
-	close(p.stop)
-}
-
-func (p *Pool) Submit(ctx context.Context, j func(context.Context) (any, error)) (any, error) {
-	ret := make(chan result, 1)
+// Submit sends a job to the worker pool for execution.
+// It returns ErrWorkerPoolClosed if the pool is closed.
+func (p *WorkerPool) Submit(job Job) error {
 	select {
-	case p.jobs <- job{ctx, j, ret}:
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case res := <-ret:
-			return res.val, res.err
-		}
-	default:
-		return nil, ErrBackpressure
+	case p.jobs <- job:
+		return nil
+	case <-p.stop:
+		return ErrWorkerPoolClosed
 	}
 }
