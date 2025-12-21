@@ -31,6 +31,7 @@ type vertx struct {
 	mu          sync.RWMutex
 	ctx         context.Context
 	cancel      context.CancelFunc
+	logger      Logger // Added logger
 }
 
 // NewVertx creates a new Vertx instance
@@ -40,6 +41,7 @@ func NewVertx(ctx context.Context) Vertx {
 		deployments: make(map[string]*deployment),
 		ctx:         ctx,
 		cancel:      cancel,
+		logger:      NewDefaultLogger(), // Initialize logger
 	}
 	// Create EventBus with Vertx reference (needed for creating FluxorContext in consumers)
 	v.eventBus = NewEventBus(ctx, v)
@@ -70,8 +72,12 @@ func (v *vertx) DeployVerticle(verticle Verticle) (string, error) {
 
 	// Handle async verticles
 	if asyncVerticle, ok := verticle.(AsyncVerticle); ok {
+		// Asynchronous start with error handling
 		asyncVerticle.AsyncStart(ctx, func(err error) {
 			if err != nil {
+				// Log the async start failure
+				v.logger.Errorf("async verticle start failed for deployment %s: %v", deploymentID, err)
+				// Remove from deployments on failure
 				v.mu.Lock()
 				delete(v.deployments, deploymentID)
 				v.mu.Unlock()
@@ -99,7 +105,8 @@ func (v *vertx) UndeployVerticle(deploymentID string) error {
 	dep, exists := v.deployments[deploymentID]
 	if !exists {
 		v.mu.Unlock()
-		return &Error{Code: "NOT_FOUND", Message: "Deployment not found: " + deploymentID}
+		// Use a more specific error code
+		return &Error{Code: "DEPLOYMENT_NOT_FOUND", Message: "Deployment not found: " + deploymentID}
 	}
 	delete(v.deployments, deploymentID)
 	v.mu.Unlock()
@@ -107,9 +114,9 @@ func (v *vertx) UndeployVerticle(deploymentID string) error {
 	// Handle async verticles
 	if asyncVerticle, ok := dep.verticle.(AsyncVerticle); ok {
 		asyncVerticle.AsyncStop(dep.ctx, func(err error) {
-			// Fail-fast: async stop errors should be reported
+			// Fail-fast: log async stop errors instead of panicking
 			if err != nil {
-				panic(fmt.Errorf("async verticle stop failed: %w", err))
+				v.logger.Errorf("async verticle stop failed for deployment %s: %v", deploymentID, err)
 			}
 		})
 	} else {
@@ -132,7 +139,10 @@ func (v *vertx) Close() error {
 
 	// Undeploy all verticles
 	for _, dep := range deployments {
-		_ = v.UndeployVerticle(dep.id)
+		if err := v.UndeployVerticle(dep.id); err != nil {
+			// Log error during mass undeploy but continue
+			v.logger.Warnf("Failed to undeploy verticle %s during close: %v", dep.id, err)
+		}
 	}
 
 	v.cancel()
