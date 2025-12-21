@@ -2,49 +2,121 @@ package fluxor
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 
-	"github.com/google/uuid"
-	"github.com/khangdcicloud/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/core"
 )
 
-type App struct {
-	bus    *core.Bus
-	worker *core.WorkerPool
+// Runtime provides a reactive runtime abstraction over gostacks
+// It manages the execution of reactive workflows and tasks
+type Runtime interface {
+	// Start starts the runtime
+	Start(ctx context.Context) error
+
+	// Stop stops the runtime
+	Stop() error
+
+	// Execute executes a task/workflow
+	Execute(task Task) error
+
+	// Deploy deploys a verticle
+	Deploy(verticle core.Verticle) (string, error)
+
+	// Vertx returns the underlying Vertx instance
+	Vertx() core.Vertx
+}
+
+// Task represents a unit of work that can be executed
+type Task interface {
+	// Execute executes the task
+	Execute(ctx context.Context) error
+
+	// Name returns the task name
+	Name() string
+}
+
+// runtime implements Runtime
+type runtime struct {
+	vertx  core.Vertx
+	tasks  []Task
+	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
+	stack  StackManager
 }
 
-func New() *App {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &App{
-		bus:    core.NewBus(),
-		worker: core.NewWorkerPool(10), // Default 10 workers
+// StackManager manages execution stacks (abstraction over gostacks)
+type StackManager interface {
+	// Push pushes a task onto the stack
+	Push(task Task) error
+
+	// Pop pops a task from the stack
+	Pop() (Task, error)
+
+	// Execute executes tasks in the stack
+	Execute(ctx context.Context) error
+
+	// Size returns the current stack size
+	Size() int
+}
+
+// NewRuntime creates a new runtime instance
+func NewRuntime(ctx context.Context) Runtime {
+	ctx, cancel := context.WithCancel(ctx)
+	vertx := core.NewVertx(ctx)
+
+	return &runtime{
+		vertx:  vertx,
+		tasks:  make([]Task, 0),
 		ctx:    ctx,
 		cancel: cancel,
+		stack:  newStackManager(),
 	}
 }
 
-func (a *App) Deploy(c core.Component) {
-	id := uuid.New().String()
-	fctx := core.NewFluxorContext(a.ctx, a.bus, a.worker, id)
-	
-	// Start Component in Reactor (Main Thread or Goroutine)
-	// Ở đây ta gọi OnStart. Trong mô hình Vert.x, OnStart chạy xong là server đã listen async.
-	if err := c.OnStart(fctx); err != nil {
-		fmt.Printf("❌ Deploy failed: %v\n", err)
-	}
+func (r *runtime) Start(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Start processing tasks
+	go r.processTasks()
+
+	return nil
 }
 
-func (a *App) Run() {
-	fmt.Println("🚀 Fluxor Engine Running... (Ctrl+C to stop)")
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	fmt.Println("\n🛑 Fluxor Shutdown")
-	a.cancel()
-	a.worker.Shutdown()
+func (r *runtime) Stop() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.cancel()
+	return r.vertx.Close()
+}
+
+func (r *runtime) Execute(task Task) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.stack.Push(task)
+}
+
+func (r *runtime) Deploy(verticle core.Verticle) (string, error) {
+	return r.vertx.DeployVerticle(verticle)
+}
+
+func (r *runtime) Vertx() core.Vertx {
+	return r.vertx
+}
+
+func (r *runtime) processTasks() {
+	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+			if err := r.stack.Execute(r.ctx); err != nil {
+				// Log error in production
+				_ = err
+			}
+		}
+	}
 }
