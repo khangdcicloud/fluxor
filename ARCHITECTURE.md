@@ -17,8 +17,6 @@
 ---
 
 
-## 2. Update ARCHITECTURE.md - Overview Section
-
 ## Overview
 
 Fluxor is a **reactive framework for building** applications in Go, inspired by Vert.x, that provides:
@@ -29,6 +27,8 @@ Fluxor is a **reactive framework for building** applications in Go, inspired by 
 - **High-performance HTTP** server using fasthttp for building web services
 - **Fail-fast error handling** for building predictable systems
 - **JSON-first** data format for building interoperable APIs
+
+For a complete working example of a Fluxor application, see [`cmd/main.go`](cmd/main.go), which demonstrates the standard initialization pattern, verticle deployment, HTTP server setup, and graceful shutdown.
 
 ### Key Characteristics
 
@@ -117,6 +117,98 @@ Communication happens through **message passing**, not shared state:
 │  (Goroutines, Channels, Network I/O, File System)          │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Application Initialization
+
+The canonical example of Fluxor application initialization can be found in [`cmd/main.go`](cmd/main.go). This section describes the standard pattern for bootstrapping a Fluxor application.
+
+### Initialization Pattern
+
+Fluxor applications follow a consistent initialization pattern using the FX dependency injection framework:
+
+```go
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // Create Fluxor application with dependency injection
+    app, err := fx.New(ctx,
+        fx.Provide(fx.NewValueProvider("example-config")), // Optional custom providers
+        fx.Invoke(fx.NewInvoker(setupApplication)),
+    )
+    if err != nil {
+        log.Fatalf("Failed to create Fluxor app: %v", err)
+    }
+
+    // Start the application
+    if err := app.Start(); err != nil {
+        log.Fatalf("Failed to start Fluxor app: %v", err)
+    }
+
+    // Setup graceful shutdown
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+    // Wait for shutdown signal
+    <-sigChan
+    log.Println("Shutting down...")
+
+    if err := app.Stop(); err != nil {
+        log.Fatalf("Error stopping app: %v", err)
+    }
+}
+```
+
+### Key Points
+
+1. **Context Management**: Always create a cancellable context for lifecycle management
+2. **FX Framework**: Use `fx.New(ctx, ...)` which requires a context and returns `(*Fluxor, error)`
+3. **Auto-Provision**: Vertx and EventBus are automatically provided by FX - no need to call `fx.Provide(core.NewVertx)`
+4. **Invoker Pattern**: Use `fx.NewInvoker()` to wrap setup functions
+5. **Error Handling**: Always check errors from `fx.New()` and `app.Start()`
+6. **Graceful Shutdown**: Implement signal handling for clean shutdown
+
+### Setup Function Pattern
+
+The setup function receives dependencies via a type-based map:
+
+```go
+func setupApplication(deps map[reflect.Type]interface{}) error {
+    // Extract dependencies using type reflection
+    vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+    eventBus := deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()].(core.EventBus)
+
+    // Deploy verticles
+    verticle := &ExampleVerticle{eventBus: eventBus}
+    if _, err := vertx.DeployVerticle(verticle); err != nil {
+        return fmt.Errorf("failed to deploy verticle: %w", err)
+    }
+
+    // Create and configure HTTP server
+    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
+    server := web.NewFastHTTPServer(vertx, config)
+    
+    // Setup routes
+    router := server.FastRouter()
+    // ... route definitions ...
+
+    // Start server in goroutine
+    go server.Start()
+
+    return nil
+}
+```
+
+### Dependencies Available
+
+The FX framework automatically provides these dependencies to setup functions:
+
+- **`core.Vertx`**: Main runtime coordinator
+- **`core.EventBus`**: Message passing infrastructure
+
+Additional dependencies can be provided using `fx.Provide()` with custom providers.
 
 ---
 

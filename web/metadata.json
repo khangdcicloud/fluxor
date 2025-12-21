@@ -1,0 +1,5 @@
+{
+  "name": "Fluxor: The Reactive Runtime for Go",
+  "description": "A high-performance, reactive Go runtime landing page inspired by Vert.x, featuring managed concurrency and safe-by-design architecture.",
+  "requestFramePermissions": []
+}

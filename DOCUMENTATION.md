@@ -80,6 +80,7 @@ package main
 import (
     "context"
     "log"
+    "reflect"
     
     "github.com/fluxorio/fluxor/pkg/core"
     "github.com/fluxorio/fluxor/pkg/fx"
@@ -87,14 +88,21 @@ import (
 )
 
 func main() {
-    // Create application with dependency injection
-    app := fx.New(
-        fx.Provide(core.NewVertx),
-        fx.Invoke(setupApplication),
-    )
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
     
-    if err := app.Start(context.Background()); err != nil {
-        log.Fatal(err)
+    // Create application with dependency injection
+    app, err := fx.New(ctx,
+        fx.Provide(fx.NewValueProvider("example-config")), // Optional custom providers
+        fx.Invoke(fx.NewInvoker(setupApplication)),
+    )
+    if err != nil {
+        log.Fatalf("Failed to create Fluxor app: %v", err)
+    }
+    
+    // Start the application
+    if err := app.Start(); err != nil {
+        log.Fatalf("Failed to start Fluxor app: %v", err)
     }
     
     app.Wait()
@@ -102,6 +110,7 @@ func main() {
 
 func setupApplication(deps map[reflect.Type]interface{}) error {
     vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+    eventBus := deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()].(core.EventBus)
     
     // Create HTTP server
     config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
@@ -633,13 +642,21 @@ import (
 )
 
 func main() {
-    app := fx.New(
-        fx.Provide(core.NewVertx),
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    
+    // Create application with dependency injection
+    app, err := fx.New(ctx,
+        fx.Provide(fx.NewValueProvider("example-config")), // Optional custom providers
         fx.Invoke(fx.NewInvoker(setupApplication)),
     )
+    if err != nil {
+        log.Fatalf("Failed to create Fluxor app: %v", err)
+    }
     
-    if err := app.Start(context.Background()); err != nil {
-        log.Fatal(err)
+    // Start the application
+    if err := app.Start(); err != nil {
+        log.Fatalf("Failed to start Fluxor app: %v", err)
     }
     
     app.Wait()
@@ -647,7 +664,7 @@ func main() {
 
 func setupApplication(deps map[reflect.Type]interface{}) error {
     vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
-    eventBus := vertx.EventBus()
+    eventBus := deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()].(core.EventBus)
     
     // Deploy verticle
     verticle := &UserServiceVerticle{eventBus: eventBus}
