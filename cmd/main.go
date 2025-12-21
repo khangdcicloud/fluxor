@@ -21,9 +21,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create Fluxor application
+	// Create Fluxor application with dependency injection
 	app, err := fx.New(ctx,
-		fx.Provide(fx.NewValueProvider("example-config")),
+		fx.Provide(fx.NewValueProvider("example-config")), // Optional custom providers
 		fx.Invoke(fx.NewInvoker(setupApplication)),
 	)
 	if err != nil {

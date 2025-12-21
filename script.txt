@@ -1,0 +1,30 @@
+# Script để thay đổi 60% → 67% utilization
+$files = @(
+    "cmd\main.go",
+    "DOCUMENTATION.md",
+    "ARCHITECTURE.md",
+    "README.md",
+    "NODEJS_APPROACH.md"
+)
+
+foreach ($file in $files) {
+    if (Test-Path $file) {
+        $content = Get-Content $file -Raw
+        
+        # Thay đổi utilizationPercent := 60 → 67
+        $content = $content -replace 'utilizationPercent\s*:=\s*60', 'utilizationPercent := 67'
+        
+        # Thay đổi CCUBasedConfigWithUtilization(..., 60) → 67
+        $content = $content -replace 'CCUBasedConfigWithUtilization\([^,]+,\s*60\)', 'CCUBasedConfigWithUtilization($1, 67)'
+        
+        # Thay đổi comment "60% utilization" → "67% utilization"
+        $content = $content -replace '60%\s*utilization', '67% utilization'
+        $content = $content -replace '60%\s*of\s*5000\s*=\s*3000', '67% of 5000 = 3350'
+        $content = $content -replace '60%\s*capacity\s*\(3000', '67% capacity (3350'
+        $content = $content -replace '40%\s*headroom', '33% headroom'
+        $content = $content -replace '40%\s*available', '33% available'
+        
+        Set-Content $file -Value $content -NoNewline
+        Write-Host "Updated: $file"
+    }
+}
