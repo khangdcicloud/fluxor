@@ -50,12 +50,12 @@ func (r *router) PATCH(path string, handler RequestHandler) {
 func (r *router) Route(method, path string, handler RequestHandler) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// Apply middleware
 	for i := len(r.middleware) - 1; i >= 0; i-- {
 		handler = r.middleware[i](handler)
 	}
-	
+
 	r.routes = append(r.routes, &route{
 		method:  method,
 		path:    path,
@@ -73,7 +73,7 @@ func (r *router) Use(middleware Middleware) {
 func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	for _, route := range r.routes {
 		if route.method == req.Method && r.matchPath(route.path, req.URL.Path) {
 			ctx := &RequestContext{
@@ -81,25 +81,25 @@ func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				Response: w,
 				Params:   r.extractParams(route.path, req.URL.Path),
 			}
-			
+
 			if err := route.handler(ctx); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 			return
 		}
 	}
-	
+
 	http.NotFound(w, req)
 }
 
 func (r *router) matchPath(pattern, path string) bool {
 	patternParts := strings.Split(pattern, "/")
 	pathParts := strings.Split(path, "/")
-	
+
 	if len(patternParts) != len(pathParts) {
 		return false
 	}
-	
+
 	for i, part := range patternParts {
 		if strings.HasPrefix(part, ":") {
 			continue // Parameter
@@ -108,7 +108,7 @@ func (r *router) matchPath(pattern, path string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -116,7 +116,7 @@ func (r *router) extractParams(pattern, path string) map[string]string {
 	params := make(map[string]string)
 	patternParts := strings.Split(pattern, "/")
 	pathParts := strings.Split(path, "/")
-	
+
 	for i, part := range patternParts {
 		if strings.HasPrefix(part, ":") {
 			paramName := strings.TrimPrefix(part, ":")
@@ -125,7 +125,6 @@ func (r *router) extractParams(pattern, path string) map[string]string {
 			}
 		}
 	}
-	
+
 	return params
 }
-
