@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,17 +13,16 @@ import (
 
 // FastHTTPServer implements Server using fasthttp for high performance
 // Uses Executor and Mailbox abstractions to hide Go concurrency primitives
+// Extends BaseServer for common lifecycle management
 type FastHTTPServer struct {
-	vertx          core.Vertx
-	router         *fastRouter
-	server         *fasthttp.Server
-	addr           string
-	mu             sync.RWMutex
-	requestMailbox concurrency.Mailbox  // Abstracted: hides chan *fasthttp.RequestCtx
-	executor       concurrency.Executor // Abstracted: hides goroutine pool
-	maxQueue       int
-	workers        int
-	logger         core.Logger // Logger for error messages
+	*core.BaseServer // Embed base server for lifecycle management
+	router           *fastRouter
+	server           *fasthttp.Server
+	addr             string
+	requestMailbox   concurrency.Mailbox  // Abstracted: hides chan *fasthttp.RequestCtx
+	executor         concurrency.Executor // Abstracted: hides goroutine pool
+	maxQueue         int
+	workers          int
 	// Metrics for monitoring
 	queuedRequests     int64 // Atomic counter for queued requests
 	rejectedRequests   int64 // Atomic counter for rejected requests (503)
@@ -167,14 +165,13 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 	executor := concurrency.NewExecutor(vertxCtx, executorConfig)
 
 	s := &FastHTTPServer{
-		vertx:          vertx,
+		BaseServer:     core.NewBaseServer("fasthttp-server", vertx),
 		router:         router,
 		addr:           config.Addr,
 		requestMailbox: requestMailbox, // Abstracted: hides chan
 		executor:       executor,       // Abstracted: hides goroutines
 		maxQueue:       config.MaxQueue,
 		workers:        config.Workers,
-		logger:         core.NewDefaultLogger(),
 		// Initialize backpressure controller with normal capacity
 		// This ensures 60% utilization under normal load
 		// Reset interval: 60 seconds (for metrics)
@@ -200,13 +197,20 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 	return s
 }
 
-// Start starts the fasthttp server
-func (s *FastHTTPServer) Start() error {
+// doStart is called by BaseServer.Start() - implements hook method
+func (s *FastHTTPServer) doStart() error {
+	// Set handler if not already set
+	if s.server.Handler == nil {
+		s.server.Handler = s.handleRequest
+	}
+	// Start request processing workers using Executor (hides goroutine creation)
+	s.startRequestWorkers()
+	// Start listening (blocking call)
 	return s.server.ListenAndServe(s.addr)
 }
 
-// Stop stops the fasthttp server gracefully
-func (s *FastHTTPServer) Stop() error {
+// doStop is called by BaseServer.Stop() - implements hook method
+func (s *FastHTTPServer) doStop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -309,8 +313,6 @@ func (s *FastHTTPServer) handleRequest(ctx *fasthttp.RequestCtx) {
 
 // SetHandler sets the request handler
 func (s *FastHTTPServer) SetHandler(handler func(*fasthttp.RequestCtx)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.server.Handler = handler
 }
 
@@ -326,7 +328,7 @@ func (s *FastHTTPServer) startRequestWorkers() {
 		)
 		if err := s.executor.Submit(task); err != nil {
 			// Log error but continue
-			s.logger.Errorf("failed to start worker %d: %v", i, err)
+			s.Logger().Errorf("failed to start worker %d: %v", i, err)
 		}
 	}
 }
@@ -335,12 +337,12 @@ func (s *FastHTTPServer) startRequestWorkers() {
 func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 	// Fail-fast: recover from panics to prevent system crash
 	// Panic isolation: one worker panic doesn't crash entire system
-	defer func() {
-		if r := recover(); r != nil {
-			// Log panic but don't re-panic to prevent system crash
-			s.logger.Errorf("panic in worker (isolated): %v", r)
-		}
-	}()
+		defer func() {
+			if r := recover(); r != nil {
+				// Log panic but don't re-panic to prevent system crash
+				s.Logger().Errorf("panic in worker (isolated): %v", r)
+			}
+		}()
 
 	// Use Mailbox abstraction (hides channel receive and select statement)
 	for {
@@ -378,7 +380,7 @@ func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 					if requestID == "" {
 						requestID = "unknown"
 					}
-					s.logger.Errorf("handler panic (request_id=%s): %v", requestID, r)
+					s.Logger().Errorf("handler panic (request_id=%s): %v", requestID, r)
 					reqCtx.WriteString(fmt.Sprintf(`{"error":"handler_panic","message":"Request handler failed","request_id":"%s"}`, requestID))
 				}
 			}()
@@ -394,7 +396,7 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 	if ctx == nil {
 		panic("request context cannot be nil")
 	}
-	if s.vertx == nil {
+	if s.Vertx() == nil {
 		panic("vertx cannot be nil")
 	}
 	if s.router == nil {
@@ -409,11 +411,12 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 
 	// Create request context with Vertx
 	reqCtx := &FastRequestContext{
-		RequestCtx: ctx,
-		Vertx:      s.vertx,
-		EventBus:   s.vertx.EventBus(),
-		Params:     make(map[string]string),
-		requestID:  requestID,
+		BaseRequestContext: core.NewBaseRequestContext(),
+		RequestCtx:         ctx,
+		Vertx:              s.Vertx(),
+		EventBus:           s.EventBus(),
+		Params:             make(map[string]string),
+		requestID:          requestID,
 	}
 
 	// Set request ID in response header for tracing
@@ -435,34 +438,14 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 }
 
 // FastRequestContext wraps fasthttp RequestCtx with Fluxor context
+// Extends BaseRequestContext for common data storage functionality
 type FastRequestContext struct {
-	RequestCtx *fasthttp.RequestCtx
-	Vertx      core.Vertx
-	EventBus   core.EventBus
-	Params     map[string]string
-	data       map[string]interface{}
-	mu         sync.RWMutex
-	requestID  string // Request ID for tracing
-}
-
-// Set stores a value in the context
-func (c *FastRequestContext) Set(key string, value interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.data == nil {
-		c.data = make(map[string]interface{})
-	}
-	c.data[key] = value
-}
-
-// Get retrieves a value from the context
-func (c *FastRequestContext) Get(key string) interface{} {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.data == nil {
-		return nil
-	}
-	return c.data[key]
+	*core.BaseRequestContext // Embed base context for data storage
+	RequestCtx               *fasthttp.RequestCtx
+	Vertx                    core.Vertx
+	EventBus                 core.EventBus
+	Params                   map[string]string
+	requestID                string // Request ID for tracing
 }
 
 // JSON writes JSON response (default format) - fail-fast

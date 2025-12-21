@@ -2,41 +2,54 @@ package web
 
 import (
 	"net/http"
-	"github.com/khangdcicloud/fluxor/pkg/core"
-	"github.com/khangdcicloud/fluxor/pkg/fx"
+	"github.com/fluxorio/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/fx"
 )
 
+// HttpVerticle is a verticle that runs an HTTP server
+// Extends BaseVerticle for common lifecycle management
 type HttpVerticle struct {
-	port   string
-	router *Router
-	server *http.Server
+	*core.BaseVerticle // Embed base verticle for lifecycle management
+	port               string
+	router             Router
+	server             *http.Server
 }
 
-func NewHttpVerticle(port string, router *Router) *HttpVerticle {
-	return &HttpVerticle{port: port, router: router}
+func NewHttpVerticle(port string, router Router) *HttpVerticle {
+	return &HttpVerticle{
+		BaseVerticle: core.NewBaseVerticle("http-verticle"),
+		port:         port,
+		router:       router,
+	}
 }
 
-func (v *HttpVerticle) OnStart(ctx *core.FluxorContext) error {
-	ctx.Log().Info("🌐 HttpVerticle Listening", "port", v.port)
+// doStart is called by BaseVerticle.Start() - implements hook method
+func (v *HttpVerticle) doStart(ctx core.FluxorContext) error {
+	logger := core.NewDefaultLogger()
+	logger.Info("HttpVerticle Listening", "port", v.port)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		c := fx.NewContext(w, r, ctx)
-		if err := v.router.Handle(c); err != nil {
-			ctx.Log().Error("Handler Error", "err", err)
+		// Router interface should implement http.Handler
+		if httpHandler, ok := v.router.(http.Handler); ok {
+			httpHandler.ServeHTTP(c.W, c.R)
 		}
 	}
 
 	v.server = &http.Server{Addr: ":" + v.port, Handler: http.HandlerFunc(handler)}
 	
-go func() { 
+	go func() { 
 		if err := v.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			ctx.Log().Error("Server crashed", "err", err)
+			logger.Error("Server crashed", "err", err)
 		}
 	}()
 	return nil
 }
 
-func (v *HttpVerticle) OnStop() error {
-	if v.server != nil { return v.server.Close() }
+// doStop is called by BaseVerticle.Stop() - implements hook method
+func (v *HttpVerticle) doStop(ctx core.FluxorContext) error {
+	if v.server != nil {
+		return v.server.Close()
+	}
 	return nil
 }

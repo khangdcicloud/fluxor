@@ -319,6 +319,16 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 - ✅ Comprehensive metrics collection
 - ✅ High-performance JSON encoding/decoding (Sonic)
 - ✅ Structured logging infrastructure
+- ✅ **Prometheus metrics export** (Day2)
+- ✅ **OpenTelemetry distributed tracing** (Day2)
+- ✅ **JWT/OAuth2 authentication** (Day2)
+- ✅ **RBAC authorization** (Day2)
+- ✅ **Security headers middleware** (Day2)
+- ✅ **CORS middleware** (Day2)
+- ✅ **Rate limiting** (Day2)
+- ✅ **Configuration management** (Day2)
+- ✅ **Enhanced health checks** (Day2)
+- ✅ **Express-like middleware** (Day2)
 
 ## Installation
 
@@ -326,22 +336,28 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 go get github.com/fluxorio/fluxor
 ```
 
-## Migration Guide
+## Documentation
 
-New to Go? Coming from Java or Node.js? Check out our comprehensive migration guide:
+### Core Documentation
 
-- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Complete guide for Java/Node.js developers migrating to Go/Fluxor
-  - Side-by-side code comparisons
-  - Pattern mapping (Java → Go, Node.js → Go)
-  - Common pitfalls and solutions
-  - Step-by-step migration plan
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design patterns
+- **[DOCUMENTATION.md](DOCUMENTATION.md)** - Complete API reference and usage guide
+- **[CORE_COMPONENTS.md](CORE_COMPONENTS.md)** - Core components definition and interactions
+- **[COMPONENT_FLOW.md](COMPONENT_FLOW.md)** - Component flow reference and data flow diagrams
+- **[BUILD_AND_TEST.md](BUILD_AND_TEST.md)** - Build and test guide
+- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Migration guide for Java/Node.js developers
+
+### Enterprise Features (Day2)
+
+- **[OBSERVABILITY.md](OBSERVABILITY.md)** - Observability guide (logging, metrics, tracing)
+- **[SECURITY.md](SECURITY.md)** - Security guide (authentication, authorization, headers, CORS, rate limiting)
+
+### Additional Guides
 
 - **[DATABASE_POOLING.md](DATABASE_POOLING.md)** - Database connection pooling guide (HikariCP equivalent)
-  - Go's built-in connection pooling (`database/sql`)
-  - PostgreSQL optimized pooling (`pgxpool`)
-  - Fluxor integration examples
-  - Migration from HikariCP
-  - **Package `pkg/db`**: Ready-to-use connection pooling with Premium Pattern
+- **[BASE_CLASSES.md](pkg/core/BASE_CLASSES.md)** - Premium Pattern base classes documentation
+- **[NODEJS_APPROACH.md](NODEJS_APPROACH.md)** - Node.js developer guide
+- **[DEVX_EXPERIENCE.md](DEVX_EXPERIENCE.md)** - Developer experience guide
 
 ## License
 

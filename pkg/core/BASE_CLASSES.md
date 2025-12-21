@@ -180,7 +180,115 @@ consumer.Handler(handler.Handle)
 
 ---
 
-### 4. BaseComponent
+### 4. BaseServer
+
+**Purpose**: Abstract base class for HTTP servers with common lifecycle management
+
+**Features**:
+- Automatic lifecycle management (start/stop state tracking)
+- Vertx and EventBus access
+- Logger integration
+- Thread-safe state management
+
+**Usage**:
+```go
+type MyHTTPServer struct {
+    *core.BaseServer
+    // ... server-specific fields
+}
+
+// Override hook method
+func (s *MyHTTPServer) doStart() error {
+    // Custom server startup logic
+    return s.server.ListenAndServe()
+}
+
+// Override hook method
+func (s *MyHTTPServer) doStop() error {
+    // Custom server shutdown logic
+    return s.server.Shutdown(ctx)
+}
+
+// Create server
+server := &MyHTTPServer{
+    BaseServer: core.NewBaseServer("my-server", vertx),
+}
+server.Start()
+```
+
+**Hook Methods**:
+- `doStart()` - Called during Start(), override for custom startup
+- `doStop()` - Called during Stop(), override for custom shutdown
+
+**Convenience Methods**:
+- `Vertx()` - Get Vertx reference
+- `EventBus()` - Get EventBus reference
+- `Logger()` - Get logger instance
+- `IsStarted()` - Check if server is started
+- `IsStopped()` - Check if server is stopped
+
+---
+
+### 5. BaseRouter
+
+**Purpose**: Abstract base class for routers with common functionality
+
+**Features**:
+- Router name management
+- Thread-safe operations
+
+**Usage**:
+```go
+type MyRouter struct {
+    *core.BaseRouter
+    // ... router-specific fields
+}
+
+router := &MyRouter{
+    BaseRouter: core.NewBaseRouter("my-router"),
+}
+```
+
+**Methods**:
+- `Name()` - Get router name
+- `SetName(name)` - Set router name
+
+---
+
+### 6. BaseRequestContext
+
+**Purpose**: Abstract base class for request contexts with common data storage
+
+**Features**:
+- Thread-safe key-value storage
+- Data management utilities
+
+**Usage**:
+```go
+type MyRequestContext struct {
+    *core.BaseRequestContext
+    // ... context-specific fields
+}
+
+ctx := &MyRequestContext{
+    BaseRequestContext: core.NewBaseRequestContext(),
+}
+
+// Use inherited methods
+ctx.Set("key", "value")
+value := ctx.Get("key")
+```
+
+**Methods**:
+- `Set(key, value)` - Store a value
+- `Get(key)` - Retrieve a value
+- `GetAll()` - Get all stored data (copy)
+- `Delete(key)` - Remove a value
+- `Clear()` - Remove all data
+
+---
+
+### 7. BaseComponent
 
 **Purpose**: Abstract base class for reusable components
 

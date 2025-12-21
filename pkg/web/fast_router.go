@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fluxorio/fluxor/pkg/core"
 	"github.com/valyala/fasthttp"
 )
 
@@ -129,11 +130,12 @@ func (r *fastRouter) Route(method, path string, handler RequestHandler) {
 	// Convert to FastRequestHandler
 	r.RouteFast(method, path, func(ctx *FastRequestContext) error {
 		reqCtx := &RequestContext{
-			Request:  nil,
-			Response: nil,
-			Vertx:    ctx.Vertx,
-			EventBus: ctx.EventBus,
-			Params:   ctx.Params,
+			BaseRequestContext: core.NewBaseRequestContext(),
+			Request:            nil,
+			Response:           nil,
+			Vertx:              ctx.Vertx,
+			EventBus:           ctx.EventBus,
+			Params:             ctx.Params,
 		}
 		return handler(reqCtx)
 	})
@@ -143,14 +145,15 @@ func (r *fastRouter) Use(middleware Middleware) {
 	// Convert middleware to FastMiddleware
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.middleware = append(r.middleware, func(next FastRequestHandler) FastRequestHandler {
+		r.middleware = append(r.middleware, func(next FastRequestHandler) FastRequestHandler {
 		return func(ctx *FastRequestContext) error {
 			reqCtx := &RequestContext{
-				Request:  nil,
-				Response: nil,
-				Vertx:    ctx.Vertx,
-				EventBus: ctx.EventBus,
-				Params:   ctx.Params,
+				BaseRequestContext: core.NewBaseRequestContext(),
+				Request:            nil,
+				Response:           nil,
+				Vertx:              ctx.Vertx,
+				EventBus:           ctx.EventBus,
+				Params:             ctx.Params,
 			}
 			wrapped := middleware(func(reqCtx *RequestContext) error {
 				return next(ctx)

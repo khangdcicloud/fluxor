@@ -18,11 +18,12 @@ func TestFastRequestContext_RequestID(t *testing.T) {
 	reqCtx.Request.Header.Set("X-Request-ID", "test-request-id")
 
 	fastCtx := &FastRequestContext{
-		RequestCtx: reqCtx,
-		Vertx:      vertx,
-		EventBus:   vertx.EventBus(),
-		Params:     make(map[string]string),
-		requestID:  "test-request-id",
+		BaseRequestContext: core.NewBaseRequestContext(),
+		RequestCtx:         reqCtx,
+		Vertx:              vertx,
+		EventBus:           vertx.EventBus(),
+		Params:             make(map[string]string),
+		requestID:          "test-request-id",
 	}
 
 	id := fastCtx.RequestID()
@@ -37,11 +38,12 @@ func TestFastRequestContext_Context(t *testing.T) {
 	defer vertx.Close()
 
 	fastCtx := &FastRequestContext{
-		RequestCtx: &fasthttp.RequestCtx{},
-		Vertx:      vertx,
-		EventBus:   vertx.EventBus(),
-		Params:     make(map[string]string),
-		requestID:  "test-request-id",
+		BaseRequestContext: core.NewBaseRequestContext(),
+		RequestCtx:         &fasthttp.RequestCtx{},
+		Vertx:              vertx,
+		EventBus:           vertx.EventBus(),
+		Params:             make(map[string]string),
+		requestID:          "test-request-id",
 	}
 
 	goCtx := fastCtx.Context()
@@ -62,10 +64,11 @@ func TestFastRequestContext_SetGet(t *testing.T) {
 	defer vertx.Close()
 
 	fastCtx := &FastRequestContext{
-		RequestCtx: &fasthttp.RequestCtx{},
-		Vertx:      vertx,
-		EventBus:   vertx.EventBus(),
-		Params:     make(map[string]string),
+		BaseRequestContext: core.NewBaseRequestContext(),
+		RequestCtx:         &fasthttp.RequestCtx{},
+		Vertx:              vertx,
+		EventBus:           vertx.EventBus(),
+		Params:             make(map[string]string),
 	}
 
 	fastCtx.Set("key1", "value1")

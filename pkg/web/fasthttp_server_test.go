@@ -34,9 +34,10 @@ func TestFastRequestContext_JSON(t *testing.T) {
 	
 	// Test fail-fast: invalid status code
 	reqCtx := &FastRequestContext{
-		Vertx:    vertx,
-		EventBus: vertx.EventBus(),
-		Params:   make(map[string]string),
+		BaseRequestContext: core.NewBaseRequestContext(),
+		Vertx:              vertx,
+		EventBus:           vertx.EventBus(),
+		Params:             make(map[string]string),
 	}
 	
 	err := reqCtx.JSON(999, "test") // Invalid status code
@@ -56,9 +57,10 @@ func TestFastRequestContext_BindJSON(t *testing.T) {
 	defer vertx.Close()
 	
 	reqCtx := &FastRequestContext{
-		Vertx:    vertx,
-		EventBus: vertx.EventBus(),
-		Params:   make(map[string]string),
+		BaseRequestContext: core.NewBaseRequestContext(),
+		Vertx:              vertx,
+		EventBus:           vertx.EventBus(),
+		Params:             make(map[string]string),
 	}
 	
 	// Test fail-fast: nil target

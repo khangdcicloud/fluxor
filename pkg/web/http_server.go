@@ -3,17 +3,16 @@ package web
 import (
 	"context"
 	"net/http"
-	"sync"
 	
 	"github.com/fluxorio/fluxor/pkg/core"
 )
 
 // httpServer implements Server
+// Extends BaseServer for common lifecycle management
 type httpServer struct {
-	vertx      core.Vertx
-	router     *router
-	httpServer *http.Server
-	mu         sync.RWMutex
+	*core.BaseServer // Embed base server for lifecycle management
+	router           *router
+	httpServer       *http.Server
 }
 
 // NewServer creates a new HTTP server
@@ -21,8 +20,8 @@ func NewServer(vertx core.Vertx, addr string) Server {
 	r := NewRouter().(*router)
 	
 	return &httpServer{
-		vertx: vertx,
-		router: r,
+		BaseServer: core.NewBaseServer("http-server", vertx),
+		router:     r,
 		httpServer: &http.Server{
 			Addr:    addr,
 			Handler: r,
@@ -30,20 +29,16 @@ func NewServer(vertx core.Vertx, addr string) Server {
 	}
 }
 
-func (s *httpServer) Start() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	
+// doStart is called by BaseServer.Start() - implements hook method
+func (s *httpServer) doStart() error {
 	// Inject Vertx and EventBus into router handlers
 	// This is done by wrapping the router's ServeHTTP
 	
 	return s.httpServer.ListenAndServe()
 }
 
-func (s *httpServer) Stop() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	
+// doStop is called by BaseServer.Stop() - implements hook method
+func (s *httpServer) doStop() error {
 	ctx := context.Background()
 	return s.httpServer.Shutdown(ctx)
 }
@@ -54,7 +49,7 @@ func (s *httpServer) Router() Router {
 
 // InjectVertx injects Vertx and EventBus into request context
 func (s *httpServer) InjectVertx(ctx *RequestContext) {
-	ctx.Vertx = s.vertx
-	ctx.EventBus = s.vertx.EventBus()
+	ctx.Vertx = s.Vertx()
+	ctx.EventBus = s.EventBus()
 }
 

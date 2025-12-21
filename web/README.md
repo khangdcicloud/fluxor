@@ -1,20 +1,59 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Fluxor.io Website
 
-# Run and deploy your AI Studio app
+React + TypeScript website for Fluxor framework built with Vite.
 
-This contains everything you need to run your app locally.
+## Quick Start
 
-View your app in AI Studio: https://ai.studio/apps/drive/1lQvEEKfJRM9CE5M3DDOntLx4t030Wlub
+### Prerequisites
+- Node.js 18+ and npm
 
-## Run Locally
+### Installation
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+```
 
+### Development
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm run dev
+```
+
+Visit http://localhost:3000
+
+### Build
+
+```bash
+npm run build
+```
+
+Production files will be in `dist/` directory.
+
+### Preview
+
+```bash
+npm run preview
+```
+
+## Components
+
+- **Navbar** - Navigation bar with links
+- **Hero** - Main hero section with code example
+- **Features** - Feature highlights
+- **Architecture** - Architecture overview
+- **Comparison** - Comparison with other frameworks
+- **Footer** - Footer with links
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS (via CDN)
+- Lucide React (icons)
+
+## Deployment
+
+See [BUILD_INSTRUCTIONS.md](./BUILD_INSTRUCTIONS.md) for detailed deployment instructions.
+
+The `dist/` directory contains all static files needed for deployment to any static hosting service.

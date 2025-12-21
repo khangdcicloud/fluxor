@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/fluxorio/fluxor/pkg/core"
 )
 
 // router implements Router
@@ -74,12 +76,13 @@ func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	for _, route := range r.routes {
+		for _, route := range r.routes {
 		if route.method == req.Method && r.matchPath(route.path, req.URL.Path) {
 			ctx := &RequestContext{
-				Request:  req,
-				Response: w,
-				Params:   r.extractParams(route.path, req.URL.Path),
+				BaseRequestContext: core.NewBaseRequestContext(),
+				Request:            req,
+				Response:           w,
+				Params:             r.extractParams(route.path, req.URL.Path),
 			}
 
 			if err := route.handler(ctx); err != nil {

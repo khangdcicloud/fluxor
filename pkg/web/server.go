@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"net/http"
-	"sync"
 
 	"github.com/fluxorio/fluxor/pkg/core"
 )
@@ -51,35 +50,15 @@ type RequestHandler func(ctx *RequestContext) error
 type Middleware func(handler RequestHandler) RequestHandler
 
 // RequestContext provides request context
+// Extends BaseRequestContext for common data storage functionality
 type RequestContext struct {
-	Context  context.Context
-	Request  *http.Request
-	Response http.ResponseWriter
-	Vertx    core.Vertx
-	EventBus core.EventBus
-	Params   map[string]string
-	mu       sync.RWMutex
-	data     map[string]interface{}
-}
-
-// Set stores a value in the context
-func (c *RequestContext) Set(key string, value interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.data == nil {
-		c.data = make(map[string]interface{})
-	}
-	c.data[key] = value
-}
-
-// Get retrieves a value from the context
-func (c *RequestContext) Get(key string) interface{} {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.data == nil {
-		return nil
-	}
-	return c.data[key]
+	*core.BaseRequestContext // Embed base context for data storage
+	Context                  context.Context
+	Request                  *http.Request
+	Response                 http.ResponseWriter
+	Vertx                    core.Vertx
+	EventBus                 core.EventBus
+	Params                   map[string]string
 }
 
 // JSON writes JSON response
