@@ -530,6 +530,99 @@ result, err := workflow.Execute(ctx)
 
 ---
 
+## Middleware
+
+### Express-like Middleware Chain
+
+Fluxor provides Express-like middleware for common functionality:
+
+```go
+import (
+    "github.com/fluxorio/fluxor/pkg/web/middleware"
+    "github.com/fluxorio/fluxor/pkg/web/middleware/security"
+    "github.com/fluxorio/fluxor/pkg/web/middleware/auth"
+    "github.com/fluxorio/fluxor/pkg/observability/prometheus"
+    "github.com/fluxorio/fluxor/pkg/observability/otel"
+)
+
+// Middleware chain (Express-like)
+router.UseFast(
+    middleware.Recovery(middleware.DefaultRecoveryConfig()), // Panic recovery
+    middleware.Logging(middleware.DefaultLoggingConfig()),   // Request logging
+    otel.HTTPMiddleware(),                                    // OpenTelemetry tracing
+    prometheus.FastHTTPMetricsMiddleware(),                   // Prometheus metrics
+    security.Headers(security.DefaultHeadersConfig()),       // Security headers
+    security.CORS(security.CORSConfig{                        // CORS
+        AllowedOrigins: []string{"https://example.com"},
+    }),
+    security.RateLimit(security.RateLimitConfig{              // Rate limiting
+        RequestsPerMinute: 100,
+    }),
+    auth.JWT(auth.JWTConfig{                                 // JWT authentication
+        SecretKey: "your-secret",
+        ClaimsKey: "user",
+    }),
+)
+```
+
+### Available Middleware
+
+**Logging**: Structured request/response logging
+```go
+router.UseFast(middleware.Logging(middleware.DefaultLoggingConfig()))
+```
+
+**Recovery**: Panic recovery with proper error responses
+```go
+router.UseFast(middleware.Recovery(middleware.DefaultRecoveryConfig()))
+```
+
+**Compression**: Gzip response compression
+```go
+router.UseFast(middleware.Compression(middleware.DefaultCompressionConfig()))
+```
+
+**Timeout**: Request timeout handling
+```go
+router.UseFast(middleware.Timeout(middleware.DefaultTimeoutConfig(5*time.Second)))
+```
+
+**Security Headers**: Security headers (HSTS, CSP, etc.)
+```go
+router.UseFast(security.Headers(security.DefaultHeadersConfig()))
+```
+
+**CORS**: Cross-Origin Resource Sharing
+```go
+router.UseFast(security.CORS(security.CORSConfig{
+    AllowedOrigins: []string{"https://example.com"},
+}))
+```
+
+**Rate Limiting**: Token bucket rate limiting
+```go
+router.UseFast(security.RateLimit(security.RateLimitConfig{
+    RequestsPerMinute: 100,
+}))
+```
+
+**JWT Authentication**: JWT token validation
+```go
+router.UseFast(auth.JWT(auth.JWTConfig{
+    SecretKey: "your-secret",
+    ClaimsKey: "user",
+}))
+```
+
+**RBAC Authorization**: Role-Based Access Control
+```go
+router.GETFast("/admin", auth.RequireRole("admin"), handler)
+```
+
+See [SECURITY.md](SECURITY.md) and [OBSERVABILITY.md](OBSERVABILITY.md) for detailed documentation.
+
+---
+
 ## Best Practices
 
 ### 1. Use Concurrency Abstractions

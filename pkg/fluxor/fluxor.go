@@ -7,36 +7,52 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/fluxor-io/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/core"
 )
 
-type Runtime struct {
-	bus         *core.EventBus
-	deployments map[string]core.Reactor // Registry
+// ReactorRuntime provides a reactor-based runtime (alternative to Verticle-based)
+// NOTE: This is experimental and uses a different API pattern
+type ReactorRuntime struct {
+	vertx       core.Vertx
+	deployments map[string]Reactor // Registry
 	mu          sync.RWMutex
 	wg          sync.WaitGroup
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
 
-func New() *Runtime {
+// Reactor interface for reactor-based components
+type Reactor interface {
+	OnStart(ctx core.FluxorContext) error
+	OnStop() error
+}
+
+func New() *ReactorRuntime {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Runtime{
-		bus:         core.NewEventBus(),
-		deployments: make(map[string]core.Reactor),
+	vertx := core.NewVertx(ctx)
+	return &ReactorRuntime{
+		vertx:       vertx,
+		deployments: make(map[string]Reactor),
 		ctx:         ctx,
 		cancel:      cancel,
 	}
 }
 
-// Implement core.RuntimeRef
-func (r *Runtime) EventBus() *core.EventBus { return r.bus }
+// EventBus returns the event bus
+func (r *ReactorRuntime) EventBus() core.EventBus {
+	return r.vertx.EventBus()
+}
 
-func (r *Runtime) Deploy(reactor core.Reactor, config map[string]any) string {
+func (r *ReactorRuntime) Deploy(reactor Reactor, config map[string]any) string {
 	id := uuid.New().String()
 	
-	// Inject Dependencies vào Context
-	fctx := core.NewFluxorContext(r.ctx, r, id, config)
+	// Create FluxorContext using vertx
+	fctx := newContext(r.ctx, r.vertx)
+	if config != nil {
+		for k, v := range config {
+			fctx.SetConfig(k, v)
+		}
+	}
 
 	r.mu.Lock()
 	r.deployments[id] = reactor
@@ -45,19 +61,18 @@ func (r *Runtime) Deploy(reactor core.Reactor, config map[string]any) string {
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		// Khởi động Reactor
+		// Start Reactor
 		if err := reactor.OnStart(fctx); err != nil {
 			slog.Error("Failed to deploy reactor", "id", id, "error", err)
 			r.Undeploy(id)
 			return
 		}
-		// Reactor chạy ngầm bên trong OnStart hoặc các goroutine con của nó
 	}()
 
 	return id
 }
 
-func (r *Runtime) Undeploy(id string) {
+func (r *ReactorRuntime) Undeploy(id string) {
 	r.mu.Lock()
 	reactor, exists := r.deployments[id]
 	if !exists {
@@ -72,7 +87,7 @@ func (r *Runtime) Undeploy(id string) {
 	}
 }
 
-func (r *Runtime) Shutdown() {
+func (r *ReactorRuntime) Shutdown() {
 	slog.Info("System shutting down...")
 	r.cancel() // Signal context cancellation
 	
@@ -83,7 +98,7 @@ func (r *Runtime) Shutdown() {
 	}
 	r.mu.Unlock()
 	
-	// Wait với Timeout
+	// Wait with Timeout
 	done := make(chan struct{})
 	go func() {
 		r.wg.Wait()
@@ -96,4 +111,36 @@ func (r *Runtime) Shutdown() {
 	case <-time.After(5 * time.Second):
 		slog.Warn("Shutdown timed out")
 	}
+	
+	r.vertx.Close()
+}
+
+// newContext creates a FluxorContext (using internal newContext function)
+func newContext(ctx context.Context, vertx core.Vertx) core.FluxorContext {
+	// Use the internal newContext from core package
+	// Since it's not exported, we need to create a wrapper
+	return &fluxorContextWrapper{
+		ctx:   ctx,
+		vertx: vertx,
+		config: make(map[string]interface{}),
+	}
+}
+
+// fluxorContextWrapper wraps the context creation
+type fluxorContextWrapper struct {
+	ctx    context.Context
+	vertx  core.Vertx
+	config map[string]interface{}
+}
+
+func (c *fluxorContextWrapper) Context() context.Context { return c.ctx }
+func (c *fluxorContextWrapper) EventBus() core.EventBus  { return c.vertx.EventBus() }
+func (c *fluxorContextWrapper) Vertx() core.Vertx        { return c.vertx }
+func (c *fluxorContextWrapper) Config() map[string]interface{} { return c.config }
+func (c *fluxorContextWrapper) SetConfig(key string, value interface{}) { c.config[key] = value }
+func (c *fluxorContextWrapper) Deploy(verticle core.Verticle) (string, error) {
+	return c.vertx.DeployVerticle(verticle)
+}
+func (c *fluxorContextWrapper) Undeploy(deploymentID string) error {
+	return c.vertx.UndeployVerticle(deploymentID)
 }

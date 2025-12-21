@@ -3,7 +3,7 @@ package fx
 import (
 	"encoding/json"
 	"net/http"
-	"github.com/khangdcicloud/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/core"
 )
 
 // JSON alias cho map (Dev UX)
@@ -13,10 +13,10 @@ type JSON map[string]any
 type Context struct {
 	W       http.ResponseWriter
 	R       *http.Request
-	coreCtx *core.FluxorContext // Giấu hàng context gốc
+	coreCtx core.FluxorContext // Core context (interface, not pointer)
 }
 
-func NewContext(w http.ResponseWriter, r *http.Request, cCtx *core.FluxorContext) *Context {
+func NewContext(w http.ResponseWriter, r *http.Request, cCtx core.FluxorContext) *Context {
 	return &Context{W: w, R: r, coreCtx: cCtx}
 }
 
@@ -35,5 +35,5 @@ func (c *Context) Error(code int, msg string) error {
 }
 
 // Accessor tới Core
-func (c *Context) Worker() *core.WorkerPool { return c.coreCtx.Worker() }
-func (c *Context) Bus() *core.Bus           { return c.coreCtx.Bus() }
+func (c *Context) EventBus() core.EventBus { return c.coreCtx.EventBus() }
+func (c *Context) Vertx() core.Vertx       { return c.coreCtx.Vertx() }

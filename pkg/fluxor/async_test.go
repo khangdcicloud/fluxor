@@ -3,6 +3,7 @@ package fluxor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -76,7 +77,7 @@ func TestThen(t *testing.T) {
 
 	// Transform int to string
 	transformed := Then(promise, func(n int) (string, error) {
-		return "value: " + string(rune(n+'0')), nil
+		return fmt.Sprintf("value: %d", n), nil
 	})
 
 	result, err := transformed.Await(ctx)

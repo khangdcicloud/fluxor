@@ -7,15 +7,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fluxor-io/fluxor/pkg/core"
-	"github.com/fluxor-io/fluxor/pkg/fluxor"
+	"github.com/fluxorio/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/fluxor"
 )
 
 // --- Ping Reactor ---
 type PingReactor struct{}
 
-func (p *PingReactor) OnStart(ctx *core.FluxorContext) error {
-	logger := ctx.Log() // Logger này đã có DeploymentID
+func (p *PingReactor) OnStart(ctx core.FluxorContext) error {
+	logger := core.NewDefaultLogger()
 	logger.Info("PingReactor Started")
 
 	go func() {
@@ -24,11 +24,11 @@ func (p *PingReactor) OnStart(ctx *core.FluxorContext) error {
 		
 		for {
 			select {
-			case <-ctx.Ctx().Done():
+			case <-ctx.Context().Done():
 				return
 			case <-ticker.C:
-				msg := fmt.Sprintf("PING from %s", ctx.ID())
-				ctx.Bus().Publish("ping-topic", msg)
+				msg := fmt.Sprintf("PING")
+				ctx.EventBus().Publish("ping-topic", msg)
 			}
 		}
 	}()
@@ -40,16 +40,16 @@ func (p *PingReactor) OnStop() error { return nil }
 // --- Pong Reactor ---
 type PongReactor struct{}
 
-func (p *PongReactor) OnStart(ctx *core.FluxorContext) error {
-	logger := ctx.Log()
-	ch := core.Subscribe[string](ctx.Bus(), "ping-topic")
+func (p *PongReactor) OnStart(ctx core.FluxorContext) error {
+	logger := core.NewDefaultLogger()
+	
+	// Subscribe to ping-topic
+	consumer := ctx.EventBus().Consumer("ping-topic")
+	consumer.Handler(func(ctx core.FluxorContext, msg core.Message) error {
+		logger.Info("Received ping", "payload", msg.Body())
+		return nil
+	})
 
-	go func() {
-		for msg := range ch {
-			// In ra log để chứng minh Deployment ID hoạt động
-			logger.Info("Received", "payload", msg)
-		}
-	}()
 	return nil
 }
 
@@ -62,7 +62,7 @@ func main() {
 	// Deploy Ping
 	rt.Deploy(&PingReactor{}, nil)
 
-	// Deploy Pong (Scale 2 workers để thấy ID khác nhau)
+	// Deploy Pong (Scale 2 workers)
 	rt.Deploy(&PongReactor{}, nil)
 	rt.Deploy(&PongReactor{}, nil)
 
