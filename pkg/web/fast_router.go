@@ -19,6 +19,8 @@ type fastRoute struct {
 	method  string
 	path    string
 	handler FastRequestHandler
+	// middleware is applied only for this route (in addition to any global middleware).
+	middleware []FastMiddleware
 }
 
 // FastRequestHandler handles fasthttp requests
@@ -48,8 +50,12 @@ func (r *fastRouter) ServeFastHTTP(ctx *FastRequestContext) {
 			// Extract params
 			r.extractParams(route.path, path, ctx.Params)
 
-			// Apply middleware chain
+			// Apply middleware chain (route-specific then global).
+			// We apply route middleware first so global middleware remains outermost.
 			handler := route.handler
+			for i := len(route.middleware) - 1; i >= 0; i-- {
+				handler = route.middleware[i](handler)
+			}
 			for i := len(r.middleware) - 1; i >= 0; i-- {
 				handler = r.middleware[i](handler)
 			}
@@ -88,6 +94,31 @@ func (r *fastRouter) PATCHFast(path string, handler FastRequestHandler) {
 	r.RouteFast("PATCH", path, handler)
 }
 
+// GETFastWith registers a GET route with per-route middleware.
+func (r *fastRouter) GETFastWith(path string, handler FastRequestHandler, middleware ...FastMiddleware) {
+	r.RouteFastWith("GET", path, handler, middleware...)
+}
+
+// POSTFastWith registers a POST route with per-route middleware.
+func (r *fastRouter) POSTFastWith(path string, handler FastRequestHandler, middleware ...FastMiddleware) {
+	r.RouteFastWith("POST", path, handler, middleware...)
+}
+
+// PUTFastWith registers a PUT route with per-route middleware.
+func (r *fastRouter) PUTFastWith(path string, handler FastRequestHandler, middleware ...FastMiddleware) {
+	r.RouteFastWith("PUT", path, handler, middleware...)
+}
+
+// DELETEFastWith registers a DELETE route with per-route middleware.
+func (r *fastRouter) DELETEFastWith(path string, handler FastRequestHandler, middleware ...FastMiddleware) {
+	r.RouteFastWith("DELETE", path, handler, middleware...)
+}
+
+// PATCHFastWith registers a PATCH route with per-route middleware.
+func (r *fastRouter) PATCHFastWith(path string, handler FastRequestHandler, middleware ...FastMiddleware) {
+	r.RouteFastWith("PATCH", path, handler, middleware...)
+}
+
 // Implement Router interface for compatibility (not used with fasthttp)
 func (r *fastRouter) GET(path string, handler RequestHandler) {
 	// Not implemented for standard http - use GETFast instead
@@ -111,18 +142,19 @@ func (r *fastRouter) PATCH(path string, handler RequestHandler) {
 
 // RouteFast registers a fast handler
 func (r *fastRouter) RouteFast(method, path string, handler FastRequestHandler) {
+	r.RouteFastWith(method, path, handler)
+}
+
+// RouteFastWith registers a fast handler with per-route middleware.
+func (r *fastRouter) RouteFastWith(method, path string, handler FastRequestHandler, middleware ...FastMiddleware) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Apply middleware
-	for i := len(r.middleware) - 1; i >= 0; i-- {
-		handler = r.middleware[i](handler)
-	}
-
 	r.routes = append(r.routes, &fastRoute{
-		method:  method,
-		path:    path,
-		handler: handler,
+		method:     method,
+		path:       path,
+		handler:    handler,
+		middleware: append([]FastMiddleware(nil), middleware...),
 	})
 }
 
@@ -145,7 +177,7 @@ func (r *fastRouter) Use(middleware Middleware) {
 	// Convert middleware to FastMiddleware
 	r.mu.Lock()
 	defer r.mu.Unlock()
-		r.middleware = append(r.middleware, func(next FastRequestHandler) FastRequestHandler {
+	r.middleware = append(r.middleware, func(next FastRequestHandler) FastRequestHandler {
 		return func(ctx *FastRequestContext) error {
 			reqCtx := &RequestContext{
 				BaseRequestContext: core.NewBaseRequestContext(),
@@ -161,6 +193,13 @@ func (r *fastRouter) Use(middleware Middleware) {
 			return wrapped(reqCtx)
 		}
 	})
+}
+
+// UseFast registers global fasthttp middleware.
+func (r *fastRouter) UseFast(middleware ...FastMiddleware) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.middleware = append(r.middleware, middleware...)
 }
 
 func (r *fastRouter) matchPath(pattern, path string) bool {
