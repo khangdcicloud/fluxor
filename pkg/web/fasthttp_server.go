@@ -289,7 +289,9 @@ func (s *FastHTTPServer) handleRequest(ctx *fasthttp.RequestCtx) {
 		atomic.AddInt64(&s.rejectedRequests, 1)
 		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
 		ctx.SetContentType("application/json")
-		ctx.WriteString(`{"error":"capacity_exceeded","message":"Server at normal capacity - backpressure applied","code":"BACKPRESSURE"}`)
+		if _, err := ctx.WriteString(`{"error":"capacity_exceeded","message":"Server at normal capacity - backpressure applied","code":"BACKPRESSURE"}`); err != nil {
+			s.Logger().Errorf("failed to write backpressure response: %v", err)
+		}
 		return
 	}
 
@@ -302,7 +304,9 @@ func (s *FastHTTPServer) handleRequest(ctx *fasthttp.RequestCtx) {
 
 		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
 		ctx.SetContentType("application/json")
-		ctx.WriteString(`{"error":"queue_full","message":"Server overloaded - backpressure applied","code":"BACKPRESSURE"}`)
+		if _, err := ctx.WriteString(`{"error":"queue_full","message":"Server overloaded - backpressure applied","code":"BACKPRESSURE"}`); err != nil {
+			s.Logger().Errorf("failed to write queue full response: %v", err)
+		}
 		return
 	}
 
@@ -381,7 +385,9 @@ func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 						requestID = "unknown"
 					}
 					s.Logger().Errorf("handler panic (request_id=%s): %v", requestID, r)
-					reqCtx.WriteString(fmt.Sprintf(`{"error":"handler_panic","message":"Request handler failed","request_id":"%s"}`, requestID))
+					if _, err := reqCtx.WriteString(fmt.Sprintf(`{"error":"handler_panic","message":"Request handler failed","request_id":"%s"}`, requestID)); err != nil {
+						s.Logger().Errorf("failed to write panic response: %v", err)
+					}
 				}
 			}()
 
@@ -464,7 +470,9 @@ func (c *FastRequestContext) JSON(statusCode int, data interface{}) error {
 		return fmt.Errorf("json encode error: %w", err)
 	}
 
-	c.RequestCtx.Write(jsonData)
+	if _, err := c.RequestCtx.Write(jsonData); err != nil {
+		return fmt.Errorf("write response error: %w", err)
+	}
 	return nil
 }
 
@@ -488,7 +496,9 @@ func (c *FastRequestContext) BindJSON(v interface{}) error {
 func (c *FastRequestContext) Text(statusCode int, text string) error {
 	c.RequestCtx.SetStatusCode(statusCode)
 	c.RequestCtx.SetContentType("text/plain")
-	c.RequestCtx.WriteString(text)
+	if _, err := c.RequestCtx.WriteString(text); err != nil {
+		return fmt.Errorf("write text response error: %w", err)
+	}
 	return nil
 }
 

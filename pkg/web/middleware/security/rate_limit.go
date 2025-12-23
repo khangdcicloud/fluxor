@@ -57,10 +57,10 @@ func newRateLimiter(requestsPerMinute int) *rateLimiter {
 		buckets: make(map[string]*tokenBucket),
 	}
 
-	// Calculate refill rate
-	refillRate := time.Minute / time.Duration(requestsPerMinute)
-	if refillRate < time.Second {
-		refillRate = time.Second
+	// Note: requestsPerMinute is used in allow() method for token bucket refill calculation
+	// The limiter validates minimum 1 request per minute
+	if requestsPerMinute < 1 {
+		requestsPerMinute = 1
 	}
 
 	// Start cleanup goroutine
@@ -93,8 +93,9 @@ func (rl *rateLimiter) cleanup() {
 	}
 }
 
-// stop stops the cleanup goroutine
-func (rl *rateLimiter) stop() {
+// Stop stops the cleanup goroutine
+// Exported for use by server shutdown
+func (rl *rateLimiter) Stop() {
 	rl.cleanupTicker.Stop()
 	close(rl.cleanupDone)
 }
@@ -203,7 +204,8 @@ func RateLimit(config RateLimitConfig) web.FastMiddleware {
 				// Default: return 429 Too Many Requests
 				ctx.RequestCtx.SetStatusCode(429)
 				ctx.RequestCtx.SetContentType("application/json")
-				ctx.RequestCtx.WriteString(`{"error":"rate_limit_exceeded","message":"Too many requests"}`)
+				// Error intentionally ignored - best effort response for rate limiting
+				_, _ = ctx.RequestCtx.WriteString(`{"error":"rate_limit_exceeded","message":"Too many requests"}`)
 				return nil
 			}
 

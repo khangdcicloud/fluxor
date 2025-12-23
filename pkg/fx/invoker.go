@@ -46,8 +46,8 @@ func (i *FuncInvoker) Invoke(deps map[reflect.Type]interface{}) error {
 		if dep, ok := deps[argType]; ok {
 			args[j] = reflect.ValueOf(dep)
 		} else {
-			// Try pointer type
-			ptrType := reflect.PtrTo(argType)
+			// Try pointer type (using PointerTo instead of deprecated PtrTo)
+			ptrType := reflect.PointerTo(argType)
 			if dep, ok := deps[ptrType]; ok {
 				args[j] = reflect.ValueOf(dep).Elem()
 			} else {

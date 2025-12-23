@@ -104,12 +104,15 @@ func TestConsumer_RequestIDPropagation(t *testing.T) {
 	ebWithID := NewEventBus(ctxWithID, vertx)
 	defer ebWithID.Close()
 
-	var receivedRequestID string
+	// Use channel for safe communication between goroutines
+	receivedCh := make(chan string, 1)
 	consumer := ebWithID.Consumer("test.address")
 	consumer.Handler(func(ctx FluxorContext, msg Message) error {
 		headers := msg.Headers()
 		if id, ok := headers["X-Request-ID"]; ok {
-			receivedRequestID = id
+			receivedCh <- id
+		} else {
+			receivedCh <- ""
 		}
 		return nil
 	})
@@ -120,10 +123,13 @@ func TestConsumer_RequestIDPropagation(t *testing.T) {
 		t.Errorf("Send() error = %v", err)
 	}
 
-	// Wait for message processing
-	time.Sleep(200 * time.Millisecond)
-
-	if receivedRequestID != requestID {
-		t.Errorf("Request ID propagation: got %v, want %v", receivedRequestID, requestID)
+	// Wait for message processing with timeout
+	select {
+	case receivedRequestID := <-receivedCh:
+		if receivedRequestID != requestID {
+			t.Errorf("Request ID propagation: got %v, want %v", receivedRequestID, requestID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Timeout waiting for message with request ID")
 	}
 }
