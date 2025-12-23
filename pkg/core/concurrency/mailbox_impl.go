@@ -2,7 +2,6 @@ package concurrency
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 )
 
@@ -10,8 +9,7 @@ import (
 // Hides chan type and select statements from public API
 type boundedMailbox struct {
 	ch       chan interface{} // Hidden: internal channel
-	mu       sync.RWMutex
-	closed   int32 // Atomic flag
+	closed   int32            // Atomic flag for thread-safe close check
 	capacity int
 }
 

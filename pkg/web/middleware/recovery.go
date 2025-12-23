@@ -53,9 +53,8 @@ func Recovery(config RecoveryConfig) web.FastMiddleware {
 						errorMsg = fmt.Sprintf("Panic: %v", r)
 					}
 
-					if _, err := ctx.RequestCtx.WriteString(fmt.Sprintf(`{"error":"internal_server_error","message":"%s","request_id":"%s"}`, errorMsg, ctx.RequestID())); err != nil {
-						// Best-effort response write; ignore on error.
-					}
+					// Error intentionally ignored - best effort response for panic recovery
+					_, _ = ctx.RequestCtx.WriteString(fmt.Sprintf(`{"error":"internal_server_error","message":"%s","request_id":"%s"}`, errorMsg, ctx.RequestID()))
 				}
 			}()
 
@@ -63,3 +62,4 @@ func Recovery(config RecoveryConfig) web.FastMiddleware {
 		}
 	}
 }
+

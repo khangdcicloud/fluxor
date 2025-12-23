@@ -162,11 +162,14 @@ func (eb *eventBus) Request(address string, body interface{}, timeout time.Durat
 	replyConsumer.Handler(func(ctx FluxorContext, msg Message) error {
 		// Use Mailbox abstraction (hides channel send)
 		if err := replyMailbox.Send(msg); err != nil {
-			// Ignore if mailbox full (non-blocking)
+			// Log if mailbox full (non-blocking) - this indicates reply arrived but couldn't be delivered
+			eb.logger.Warnf("reply mailbox full for address %s: %v", replyAddress, err)
 		}
 		return nil
 	})
-	defer replyConsumer.Unregister()
+	// Unregister is called after timeout/response, error is intentionally ignored
+	// as the consumer cleanup is best-effort during request completion
+	defer func() { _ = replyConsumer.Unregister() }()
 
 	// Send request with reply address
 	headers := map[string]string{"replyAddress": replyAddress}

@@ -89,19 +89,13 @@ func (bh *BaseHandler) DecodeBody(msg Message, v interface{}) error {
 		return &Error{Code: "EMPTY_BODY", Message: "message body is empty"}
 	}
 
-	// If body is already the correct type, use it directly
-	if typed, ok := body.(interface{}); ok {
-		// Try JSON decode if body is []byte
-		if bodyBytes, ok := body.([]byte); ok {
-			return JSONDecode(bodyBytes, v)
-		}
-		// Try direct assignment if types match
-		if v == typed {
-			return nil
-		}
+	// Try JSON decode if body is []byte
+	if bodyBytes, ok := body.([]byte); ok {
+		return JSONDecode(bodyBytes, v)
 	}
 
-	return &Error{Code: "DECODE_ERROR", Message: "failed to decode message body"}
+	// Body is some other type - return error
+	return &Error{Code: "DECODE_ERROR", Message: "failed to decode message body - expected []byte"}
 }
 
 // EncodeBody is a convenience method to encode data to JSON
