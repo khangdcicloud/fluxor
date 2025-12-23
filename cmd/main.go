@@ -15,6 +15,9 @@ import (
 	"github.com/fluxorio/fluxor/pkg/fx"
 	"github.com/fluxorio/fluxor/pkg/web"
 	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpadaptor"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/fluxorio/fluxor/pkg/observability/prometheus"
 )
 
 func main() {
@@ -95,11 +98,37 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 		})
 	})
 
-	// Health check endpoint
+	// Add metrics middleware to router
+	router.UseFast(prometheus.FastHTTPMetricsMiddleware())
+
+	// Prometheus metrics endpoint
+	metricsHandler := fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler())
+	router.GETFast("/metrics", func(ctx *web.FastRequestContext) error {
+		metricsHandler(ctx.RequestCtx)
+		return nil
+	})
+
+	// Start metrics updater
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			prometheus.UpdateServerMetrics(server)
+		}
+	}()
+
+	// Liveness check endpoint (formerly /health)
+	router.GETFast("/live", func(ctx *web.FastRequestContext) error {
+		return ctx.JSON(200, map[string]interface{}{
+			"status":    "up",
+			"timestamp": time.Now().Unix(),
+		})
+	})
+
+	// Keep /health as alias for /live for backward compatibility
 	router.GETFast("/health", func(ctx *web.FastRequestContext) error {
 		return ctx.JSON(200, map[string]interface{}{
-			"status":    "healthy",
-			"service":   "fluxor",
+			"status":    "up",
 			"timestamp": time.Now().Unix(),
 		})
 	})
@@ -107,20 +136,26 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 	// Readiness check endpoint
 	router.GETFast("/ready", func(ctx *web.FastRequestContext) error {
 		metrics := server.Metrics()
-		// Consider ready if queue utilization is below 90%
-		ready := metrics.QueueUtilization < 90.0 && metrics.CCUUtilization < 90.0
+		// Consider ready if queue utilization is below 90% and backpressure not active
+		// Also check vertx deployment count > 0 (example check)
+		vertx := ctx.Vertx
+		ready := metrics.QueueUtilization < 90.0 && metrics.CCUUtilization < 90.0 && vertx.DeploymentCount() > 0
 		statusCode := 200
+		status := "ready"
 		if !ready {
 			statusCode = 503
+			status = "not_ready"
 		}
 		return ctx.JSON(statusCode, map[string]interface{}{
+			"status":            status,
 			"ready":             ready,
 			"queue_utilization": metrics.QueueUtilization,
 			"ccu_utilization":   metrics.CCUUtilization,
+			"verticle_count":    vertx.DeploymentCount(),
 		})
 	})
 
-	// Metrics endpoint - shows backpressure and CCU metrics
+	// API metrics endpoint (JSON) - preserved for compatibility but discouraged in favor of /metrics
 	router.GETFast("/api/metrics", func(ctx *web.FastRequestContext) error {
 		metrics := server.Metrics()
 		return ctx.JSON(200, map[string]interface{}{

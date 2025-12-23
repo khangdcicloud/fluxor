@@ -78,9 +78,20 @@ import (
     "github.com/fluxorio/fluxor/pkg/web"
 )
 
-// Register metrics endpoint
-router := server.FastRouter()
-prometheus.RegisterMetricsEndpoint(router, "/metrics")
+// Register metrics endpoint (using standard promhttp)
+    metricsHandler := fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler())
+    router.GETFast("/metrics", func(ctx *web.FastRequestContext) error {
+        metricsHandler(ctx.RequestCtx)
+        return nil
+    })
+
+    // Update server metrics periodically
+    go func() {
+        ticker := time.NewTicker(5 * time.Second)
+        for range ticker.C {
+            prometheus.UpdateServerMetrics(server)
+        }
+    }()
 
 // Add metrics middleware
 router.UseFast(prometheus.FastHTTPMetricsMiddleware())
@@ -496,6 +507,33 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
     return nil
 }
 ```
+
+---
+
+## Monitoring Stack
+
+### Docker Compose Setup
+
+Run the full monitoring stack (Prometheus + Grafana + App):
+
+```bash
+docker-compose up -d
+```
+
+- **Fluxor App**: http://localhost:8080
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000 (admin/admin)
+
+### Grafana Dashboard
+
+A pre-configured dashboard is available at `observability/grafana-dashboard.json`.
+Import this JSON file into Grafana to view:
+- Request Rate & Latency (P95)
+- Backpressure Queue Length
+- CCU Utilization
+- Active Verticle Count
+
+![Dashboard Screenshot](https://example.com/dashboard-screenshot.png)
 
 ---
 

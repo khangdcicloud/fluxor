@@ -46,6 +46,7 @@ type Metrics struct {
 	ServerNormalCCU             prometheus.Gauge
 	ServerCCUUtilization        prometheus.Gauge
 	ServerBackpressureQueueLength prometheus.Gauge
+	ServerVerticleCount         prometheus.Gauge
 
 	// Verticle metrics
 	VerticleCount prometheus.Gauge
@@ -193,6 +194,12 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 				Help: "Current backpressure queue length",
 			},
 		),
+		ServerVerticleCount: promauto.With(registerer).NewGauge(
+			prometheus.GaugeOpts{
+				Name: "fluxor_server_verticle_count",
+				Help: "Number of deployed verticles",
+			},
+		),
 
 		// Verticle metrics
 		VerticleCount: promauto.With(registerer).NewGauge(
@@ -241,7 +248,7 @@ func (m *Metrics) RecordDatabaseQuery(operation string, duration time.Duration) 
 }
 
 // UpdateServerMetrics updates server metrics
-func (m *Metrics) UpdateServerMetrics(queued int64, rejected int64, currentCCU int, normalCCU int, utilization float64) {
+func (m *Metrics) UpdateServerMetrics(queued int64, rejected int64, currentCCU int, normalCCU int, utilization float64, verticleCount int) {
 	m.ServerQueuedRequests.Set(float64(queued))
 	m.ServerBackpressureQueueLength.Set(float64(queued)) // Alias for backpressure
 	if rejected > 0 {
@@ -250,6 +257,8 @@ func (m *Metrics) UpdateServerMetrics(queued int64, rejected int64, currentCCU i
 	m.ServerCurrentCCU.Set(float64(currentCCU))
 	m.ServerNormalCCU.Set(float64(normalCCU))
 	m.ServerCCUUtilization.Set(utilization)
+	m.ServerVerticleCount.Set(float64(verticleCount))
+	m.VerticleCount.Set(float64(verticleCount))
 }
 
 // UpdateVerticleCount updates the verticle count metric
@@ -360,4 +369,3 @@ func Gauge(name, help string, labels ...string) *prometheus.GaugeVec {
 func Histogram(name, help string, buckets []float64, labels ...string) *prometheus.HistogramVec {
 	return GetMetrics().Histogram(name, help, buckets, labels...)
 }
-

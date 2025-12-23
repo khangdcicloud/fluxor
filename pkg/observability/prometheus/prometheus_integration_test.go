@@ -21,7 +21,8 @@ func TestPrometheusMetrics(t *testing.T) {
 	metrics.UpdateDatabasePool(25, 5, 20, 0)
 
 	// Test server metrics
-	metrics.UpdateServerMetrics(100, 0, 500, 670, 75.5)
+	// queued, rejected, currentCCU, normalCCU, utilization, verticleCount
+	metrics.UpdateServerMetrics(100, 0, 500, 670, 75.5, 5)
 
 	// Test custom metrics
 	counter := metrics.Counter("custom_events_total", "Total custom events", "type")
@@ -32,4 +33,3 @@ func TestPrometheusMetrics(t *testing.T) {
 
 	// If we get here without panic, metrics are working
 }
-

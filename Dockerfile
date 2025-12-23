@@ -17,4 +17,3 @@ COPY --from=builder /out/fluxor-demo /app/fluxor-demo
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/app/fluxor-demo"]
-
