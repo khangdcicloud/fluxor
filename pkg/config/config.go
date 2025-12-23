@@ -223,4 +223,3 @@ func MustGetTyped[T any](config interface{}) T {
 	}
 	return val
 }
-

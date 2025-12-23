@@ -31,17 +31,17 @@ func TestJSONEncode_Pooling(t *testing.T) {
 	// Test that encoding works correctly with Sonic
 	data1 := map[string]string{"key1": "value1"}
 	data2 := map[string]int{"key2": 42}
-	
+
 	encoded1, err := JSONEncode(data1)
 	if err != nil {
 		t.Fatalf("JSONEncode() error = %v", err)
 	}
-	
+
 	encoded2, err := JSONEncode(data2)
 	if err != nil {
 		t.Fatalf("JSONEncode() error = %v", err)
 	}
-	
+
 	// Verify both encodings are correct using standard json for compatibility check
 	var decoded1 map[string]string
 	if err := json.Unmarshal(encoded1, &decoded1); err != nil {
@@ -50,7 +50,7 @@ func TestJSONEncode_Pooling(t *testing.T) {
 	if decoded1["key1"] != "value1" {
 		t.Errorf("decoded1 = %v, want map[key1:value1]", decoded1)
 	}
-	
+
 	var decoded2 map[string]int
 	if err := json.Unmarshal(encoded2, &decoded2); err != nil {
 		t.Errorf("Failed to decode encoded2: %v", err)

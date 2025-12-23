@@ -21,7 +21,7 @@ func (p *PingReactor) OnStart(ctx core.FluxorContext) error {
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ctx.Context().Done():
@@ -42,7 +42,7 @@ type PongReactor struct{}
 
 func (p *PongReactor) OnStart(ctx core.FluxorContext) error {
 	logger := core.NewDefaultLogger()
-	
+
 	// Subscribe to ping-topic
 	consumer := ctx.EventBus().Consumer("ping-topic")
 	consumer.Handler(func(ctx core.FluxorContext, msg core.Message) error {

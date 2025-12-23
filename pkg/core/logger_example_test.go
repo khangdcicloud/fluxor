@@ -98,4 +98,3 @@ func ExampleLogger_errorLogging() {
 
 	// Output: [ERROR] Validation failed map[error_code:VALIDATION_ERROR field:email request_id:... value:invalid-email]
 }
-

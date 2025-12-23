@@ -57,4 +57,3 @@ server:
 		t.Errorf("Server.Host = %v, want localhost", cfg.Server.Host)
 	}
 }
-

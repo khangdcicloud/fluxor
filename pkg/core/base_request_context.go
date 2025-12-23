@@ -71,4 +71,3 @@ func (brc *BaseRequestContext) Clear() {
 	defer brc.mu.Unlock()
 	brc.data = make(map[string]interface{})
 }
-

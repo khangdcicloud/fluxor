@@ -5,7 +5,7 @@ package core
 type Verticle interface {
 	// Start is called when the verticle is deployed
 	Start(ctx FluxorContext) error
-	
+
 	// Stop is called when the verticle is undeployed
 	Stop(ctx FluxorContext) error
 }
@@ -13,11 +13,10 @@ type Verticle interface {
 // AsyncVerticle represents a verticle that handles asynchronous operations
 type AsyncVerticle interface {
 	Verticle
-	
+
 	// AsyncStart is called asynchronously when the verticle is deployed
 	AsyncStart(ctx FluxorContext, resultHandler func(error))
-	
+
 	// AsyncStop is called asynchronously when the verticle is undeployed
 	AsyncStop(ctx FluxorContext, resultHandler func(error))
 }
-

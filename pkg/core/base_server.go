@@ -137,4 +137,3 @@ func (bs *BaseServer) IsStopped() bool {
 	defer bs.mu.RUnlock()
 	return bs.stopped
 }
-

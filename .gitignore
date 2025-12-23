@@ -107,3 +107,7 @@ node
 *.pid
 *.seed
 *.pid.lock
+# Binaries
+enterprise
+main
+example

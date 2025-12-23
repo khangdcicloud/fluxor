@@ -33,4 +33,3 @@ func SaveJSON(path string, config interface{}) error {
 
 	return nil
 }
-

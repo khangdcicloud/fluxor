@@ -11,16 +11,16 @@ import (
 // defaultExecutor implements Executor using channels and goroutines internally
 // Hides all Go concurrency primitives from public API
 type defaultExecutor struct {
-	taskChan      chan Task // Hidden: internal channel
-	workers       int
-	queueSize     int
-	wg            sync.WaitGroup
-	ctx           context.Context
-	cancel        context.CancelFunc
-	mu            sync.RWMutex
-	closed        bool
-	logger        simpleLogger // Logger for error messages
-	
+	taskChan  chan Task // Hidden: internal channel
+	workers   int
+	queueSize int
+	wg        sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
+	closed    bool
+	logger    simpleLogger // Logger for error messages
+
 	// Metrics (atomic for thread-safety)
 	queuedTasks    int64
 	completedTasks int64
@@ -52,7 +52,7 @@ func NewExecutor(ctx context.Context, config ExecutorConfig) Executor {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	
+
 	exec := &defaultExecutor{
 		taskChan:  make(chan Task, config.QueueSize), // Hidden channel
 		workers:   config.Workers,
@@ -87,7 +87,7 @@ func (e *defaultExecutor) worker(id int) {
 				return // Channel closed
 			}
 			atomic.AddInt64(&e.queuedTasks, -1)
-			
+
 			// Execute task
 			if err := task.Execute(e.ctx); err != nil {
 				// Log error but continue processing
@@ -205,4 +205,3 @@ func (e *defaultExecutor) Stats() ExecutorStats {
 		QueueUtilization: queueUtilization,
 	}
 }
-

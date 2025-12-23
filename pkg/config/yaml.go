@@ -34,4 +34,3 @@ func SaveYAML(path string, config interface{}) error {
 
 	return nil
 }
-

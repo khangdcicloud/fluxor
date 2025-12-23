@@ -26,9 +26,9 @@ import (
 
 // Enterprise Application Configuration
 type AppConfig struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Auth     AuthConfig     `yaml:"auth"`
+	Server        ServerConfig        `yaml:"server"`
+	Database      DatabaseConfig      `yaml:"database"`
+	Auth          AuthConfig          `yaml:"auth"`
 	Observability ObservabilityConfig `yaml:"observability"`
 }
 
@@ -39,14 +39,14 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
-	Database        string `yaml:"database"`
-	User            string `yaml:"user"`
-	Password        string `yaml:"password"`
-	MaxConnections  int    `yaml:"max_connections"`
-	MinConnections  int    `yaml:"min_connections"`
-	MaxIdleTime     int    `yaml:"max_idle_time"`
+	Host           string `yaml:"host"`
+	Port           int    `yaml:"port"`
+	Database       string `yaml:"database"`
+	User           string `yaml:"user"`
+	Password       string `yaml:"password"`
+	MaxConnections int    `yaml:"max_connections"`
+	MinConnections int    `yaml:"min_connections"`
+	MaxIdleTime    int    `yaml:"max_idle_time"`
 }
 
 type AuthConfig struct {
@@ -55,10 +55,10 @@ type AuthConfig struct {
 }
 
 type ObservabilityConfig struct {
-	EnableTracing    bool   `yaml:"enable_tracing"`
-	EnableMetrics    bool   `yaml:"enable_metrics"`
-	JaegerEndpoint   string `yaml:"jaeger_endpoint"`
-	PrometheusPort   string `yaml:"prometheus_port"`
+	EnableTracing  bool   `yaml:"enable_tracing"`
+	EnableMetrics  bool   `yaml:"enable_metrics"`
+	JaegerEndpoint string `yaml:"jaeger_endpoint"`
+	PrometheusPort string `yaml:"prometheus_port"`
 }
 
 func main() {
@@ -184,7 +184,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 			Endpoint:       cfg.Observability.JaegerEndpoint,
 			SampleRate:     1.0,
 		}
-		
+
 		if err := otel.Initialize(context.Background(), otelConfig); err != nil {
 			logger.Warn("Failed to initialize OpenTelemetry", "error", err)
 		} else {
@@ -206,7 +206,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		cfg.Database.Password,
 		cfg.Database.Database,
 	)
-	
+
 	dbConfig := db.PoolConfig{
 		DSN:             dsn,
 		DriverName:      "postgres",
@@ -215,7 +215,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		ConnMaxIdleTime: time.Duration(cfg.Database.MaxIdleTime) * time.Second,
 		ConnMaxLifetime: 30 * time.Minute,
 	}
-	
+
 	dbComponent := db.NewDatabaseComponent(dbConfig)
 	logger.Info("Database connection pool configured",
 		"max", cfg.Database.MaxConnections,
@@ -227,7 +227,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		logger:   logger,
 		db:       dbComponent,
 	}
-	
+
 	deploymentID, err := vertx.DeployVerticle(userVerticle)
 	if err != nil {
 		return fmt.Errorf("failed to deploy user verticle: %w", err)
@@ -239,7 +239,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 	utilizationPercent := cfg.Server.UtilizationPercent
 	serverConfig := web.CCUBasedConfigWithUtilization(cfg.Server.Port, maxCCU, utilizationPercent)
 	normalCapacity := serverConfig.MaxQueue + serverConfig.Workers
-	
+
 	logger.Info("Server configured with CCU-based backpressure",
 		"max_ccu", maxCCU,
 		"normal_capacity", normalCapacity,
@@ -251,7 +251,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 	router := server.FastRouter()
 
 	// 6. Setup Middleware Chain (Express-like)
-	
+
 	// Security middleware (CORS, Security Headers, Rate Limiting)
 	corsMiddleware := security.CORS(security.CORSConfig{
 		AllowedOrigins: cfg.Auth.AllowedOrigins,
@@ -259,7 +259,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         3600,
 	})
-	
+
 	securityHeadersMiddleware := security.Headers(security.HeadersConfig{
 		HSTS:                true,
 		HSTSMaxAge:          31536000,
@@ -268,7 +268,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		XFrameOptions:       "DENY",
 		XContentTypeOptions: true,
 	})
-	
+
 	rateLimitMiddleware := security.RateLimit(security.RateLimitConfig{
 		RequestsPerMinute: 1000, // 1000 requests per minute per IP
 		KeyFunc: func(ctx *web.FastRequestContext) string {
@@ -282,12 +282,12 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		LogRequestID: true,
 		SkipPaths:    []string{"/health"},
 	})
-	
+
 	// Recovery middleware (panic recovery)
 	recoveryMiddleware := middleware.Recovery(middleware.RecoveryConfig{
 		Logger: logger,
 	})
-	
+
 	// Compression middleware
 	compressionMiddleware := middleware.Compression(middleware.CompressionConfig{})
 
@@ -306,7 +306,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		rateLimitMiddleware,
 		compressionMiddleware,
 	}
-	
+
 	if otelMiddleware != nil {
 		middlewareChain = append(middlewareChain, otelMiddleware)
 	}
@@ -317,39 +317,39 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 	router.GETFast("/", applyMiddleware(middlewareChain, handleHome(logger)))
 	router.GETFast("/health", applyMiddleware(middlewareChain, handleHealth(dbComponent)))
 	router.GETFast("/ready", applyMiddleware(middlewareChain, handleReady(server, dbComponent)))
-	
+
 	// Prometheus metrics endpoint
 	if cfg.Observability.EnableMetrics {
 		prometheus.RegisterMetricsEndpoint(router, "/metrics")
 	}
-	
+
 	// API routes with authentication
 	apiMiddleware := append(middlewareChain, createAuthMiddleware(cfg.Auth.JWTSecret))
-	
+
 	router.GETFast("/api/users", applyMiddleware(apiMiddleware, handleGetUsers(eventBus, logger)))
 	router.POSTFast("/api/users", applyMiddleware(apiMiddleware, handleCreateUser(eventBus, logger)))
 	router.GETFast("/api/users/:id", applyMiddleware(apiMiddleware, handleGetUser(eventBus, logger)))
-	
+
 	// Admin routes with RBAC
 	adminMiddleware := append(apiMiddleware, createRBACMiddleware([]string{"admin"}))
 	router.GETFast("/api/admin/metrics", applyMiddleware(adminMiddleware, handleMetrics(server)))
 	router.GETFast("/api/admin/stats", applyMiddleware(adminMiddleware, handleStats(dbComponent)))
-	
+
 	// Auth routes
 	router.POSTFast("/api/auth/login", applyMiddleware(middlewareChain, handleLogin(cfg.Auth.JWTSecret, logger)))
 	router.POSTFast("/api/auth/register", applyMiddleware(middlewareChain, handleRegister(eventBus, logger)))
 
 	// 8. Setup Enhanced Health Checks
 	registry := health.NewRegistry()
-	
+
 	// Add database health check
 	registry.Register("database", health.DatabaseComponentCheck(dbComponent))
-	
+
 	// Add external service health check (example - optional, may fail if service doesn't exist)
 	// registry.Register("external_api", health.HTTPCheck("https://api.example.com/health", 5*time.Second))
-	
+
 	healthAggregator := health.NewAggregator(registry)
-	
+
 	router.GETFast("/health/detailed", applyMiddleware(middlewareChain, healthAggregator.HandleHealth))
 
 	// 9. Setup Server Handler
@@ -388,10 +388,10 @@ func applyMiddleware(middlewares []web.FastMiddleware, handler web.FastRequestHa
 
 func createAuthMiddleware(jwtSecret string) web.FastMiddleware {
 	return auth.JWT(auth.JWTConfig{
-		SecretKey:  jwtSecret,
-		ClaimsKey:  "user",
+		SecretKey:   jwtSecret,
+		ClaimsKey:   "user",
 		TokenLookup: "header:Authorization",
-		AuthScheme: "Bearer",
+		AuthScheme:  "Bearer",
 	})
 }
 
@@ -444,19 +444,19 @@ func handleHealth(dbComponent *db.DatabaseComponent) web.FastRequestHandler {
 func handleReady(server *web.FastHTTPServer, dbComponent *db.DatabaseComponent) web.FastRequestHandler {
 	return func(ctx *web.FastRequestContext) error {
 		metrics := server.Metrics()
-		
+
 		// Check server readiness
 		serverReady := metrics.QueueUtilization < 90.0 && metrics.CCUUtilization < 90.0
-		
+
 		// Check database readiness (example)
 		dbReady := true // dbComponent.IsHealthy()
-		
+
 		ready := serverReady && dbReady
 		statusCode := 200
 		if !ready {
 			statusCode = 503
 		}
-		
+
 		return ctx.JSON(statusCode, map[string]interface{}{
 			"ready": ready,
 			"checks": map[string]interface{}{
@@ -476,10 +476,10 @@ func handleReady(server *web.FastHTTPServer, dbComponent *db.DatabaseComponent) 
 func handleGetUsers(eventBus core.EventBus, logger core.Logger) web.FastRequestHandler {
 	return func(ctx *web.FastRequestContext) error {
 		logger.WithContext(ctx.Context()).Info("Fetching users")
-		
+
 		// Example: Send request to user service via event bus
 		// msg, err := eventBus.Request("user.service.get", nil, 5*time.Second)
-		
+
 		return ctx.JSON(200, map[string]interface{}{
 			"users": []map[string]interface{}{
 				{"id": "1", "name": "John Doe", "email": "john@example.com"},
@@ -498,12 +498,12 @@ func handleCreateUser(eventBus core.EventBus, logger core.Logger) web.FastReques
 				"error": "invalid request body",
 			})
 		}
-		
+
 		logger.WithContext(ctx.Context()).Info("Creating user", "data", userData)
-		
+
 		return ctx.JSON(201, map[string]interface{}{
-			"message": "User created successfully",
-			"user":    userData,
+			"message":    "User created successfully",
+			"user":       userData,
 			"request_id": ctx.RequestID(),
 		})
 	}
@@ -512,9 +512,9 @@ func handleCreateUser(eventBus core.EventBus, logger core.Logger) web.FastReques
 func handleGetUser(eventBus core.EventBus, logger core.Logger) web.FastRequestHandler {
 	return func(ctx *web.FastRequestContext) error {
 		userID := ctx.Param("id")
-		
+
 		logger.WithContext(ctx.Context()).Info("Fetching user", "user_id", userID)
-		
+
 		return ctx.JSON(200, map[string]interface{}{
 			"user": map[string]interface{}{
 				"id":    userID,
@@ -529,7 +529,7 @@ func handleGetUser(eventBus core.EventBus, logger core.Logger) web.FastRequestHa
 func handleMetrics(server *web.FastHTTPServer) web.FastRequestHandler {
 	return func(ctx *web.FastRequestContext) error {
 		metrics := server.Metrics()
-		
+
 		return ctx.JSON(200, map[string]interface{}{
 			"server": map[string]interface{}{
 				"queued_requests":     metrics.QueuedRequests,
@@ -553,9 +553,9 @@ func handleMetrics(server *web.FastHTTPServer) web.FastRequestHandler {
 func handleStats(dbComponent *db.DatabaseComponent) web.FastRequestHandler {
 	return func(ctx *web.FastRequestContext) error {
 		stats := dbComponent.Stats()
-		
+
 		return ctx.JSON(200, map[string]interface{}{
-			"database": stats,
+			"database":   stats,
 			"request_id": ctx.RequestID(),
 		})
 	}
@@ -569,10 +569,10 @@ func handleLogin(jwtSecret string, logger core.Logger) web.FastRequestHandler {
 				"error": "invalid request body",
 			})
 		}
-		
+
 		// TODO: Validate credentials against database
 		// For demo purposes, accept any credentials
-		
+
 		// Generate JWT token
 		tokenGenerator := auth.NewJWTTokenGenerator([]byte(jwtSecret))
 		token, err := tokenGenerator.Generate(map[string]interface{}{
@@ -580,14 +580,14 @@ func handleLogin(jwtSecret string, logger core.Logger) web.FastRequestHandler {
 			"email":   credentials["email"],
 			"roles":   []string{"user"},
 		}, 24*time.Hour)
-		
+
 		if err != nil {
 			logger.Error("Failed to generate token", "error", err)
 			return ctx.JSON(500, map[string]interface{}{
 				"error": "failed to generate token",
 			})
 		}
-		
+
 		return ctx.JSON(200, map[string]interface{}{
 			"token":      token,
 			"expires_in": 86400,
@@ -604,12 +604,12 @@ func handleRegister(eventBus core.EventBus, logger core.Logger) web.FastRequestH
 				"error": "invalid request body",
 			})
 		}
-		
+
 		logger.WithContext(ctx.Context()).Info("Registering new user", "email", userData["email"])
-		
+
 		// TODO: Create user in database
 		// TODO: Send welcome email via event bus
-		
+
 		return ctx.JSON(201, map[string]interface{}{
 			"message": "User registered successfully",
 			"user": map[string]interface{}{
@@ -630,21 +630,21 @@ type UserServiceVerticle struct {
 
 func (v *UserServiceVerticle) Start(ctx core.FluxorContext) error {
 	v.logger.Info("UserServiceVerticle started")
-	
+
 	// Register event bus consumers for user service
 	consumer := ctx.EventBus().Consumer("user.service.get")
 	consumer.Handler(func(ctx core.FluxorContext, msg core.Message) error {
 		v.logger.Info("Handling user.service.get request")
-		
+
 		// TODO: Fetch from database
 		users := []map[string]interface{}{
 			{"id": "1", "name": "John Doe"},
 			{"id": "2", "name": "Jane Smith"},
 		}
-		
+
 		return msg.Reply(users)
 	})
-	
+
 	return nil
 }
 

@@ -30,4 +30,3 @@ func GenerateRequestID() string {
 func WithNewRequestID(ctx context.Context) context.Context {
 	return WithRequestID(ctx, GenerateRequestID())
 }
-

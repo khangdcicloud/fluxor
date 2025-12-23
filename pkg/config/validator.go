@@ -101,7 +101,7 @@ func RangeValidator(fieldName string, min, max float64) Validator {
 func getNestedField(val reflect.Value, fieldPath string) reflect.Value {
 	parts := strings.Split(fieldPath, ".")
 	current := val
-	
+
 	for _, part := range parts {
 		if current.Kind() == reflect.Ptr {
 			current = current.Elem()
@@ -170,4 +170,3 @@ func OneOfValidator(fieldName string, allowedValues ...interface{}) Validator {
 		return fmt.Errorf("field %s value %v is not one of allowed values: %v", fieldName, fieldInterface, allowedValues)
 	})
 }
-
