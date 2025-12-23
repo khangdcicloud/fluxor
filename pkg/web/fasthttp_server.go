@@ -16,7 +16,7 @@ import (
 // Extends BaseServer for common lifecycle management
 type FastHTTPServer struct {
 	*core.BaseServer // Embed base server for lifecycle management
-	router           *fastRouter
+	router           *FastRouter
 	server           *fasthttp.Server
 	addr             string
 	requestMailbox   concurrency.Mailbox  // Abstracted: hides chan *fasthttp.RequestCtx
@@ -146,7 +146,7 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 		config = DefaultFastHTTPServerConfig(":8080")
 	}
 
-	router := newFastRouter()
+	router := NewFastRouter()
 
 	// Calculate normal CCU capacity (queue + workers)
 	// This is the target utilization capacity (e.g., 67% of max)
@@ -232,7 +232,7 @@ func (s *FastHTTPServer) Router() Router {
 }
 
 // FastRouter returns the fast router for direct access
-func (s *FastHTTPServer) FastRouter() *fastRouter {
+func (s *FastHTTPServer) FastRouter() *FastRouter {
 	return s.router
 }
 

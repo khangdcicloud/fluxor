@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -18,6 +19,9 @@ type Message interface {
 
 	// Reply sends a reply to this message
 	Reply(body interface{}) error
+
+	// DecodeBody decodes the message body into v
+	DecodeBody(v interface{}) error
 
 	// Fail indicates that processing failed
 	Fail(failureCode int, message string) error
@@ -71,6 +75,16 @@ func (m *message) Reply(body interface{}) error {
 		return ErrNoReplyAddress
 	}
 	return m.eventBus.Send(m.replyAddress, body)
+}
+
+func (m *message) DecodeBody(v interface{}) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if data, ok := m.body.([]byte); ok {
+		return JSONDecode(data, v)
+	}
+	return fmt.Errorf("body is not []byte, got %T", m.body)
 }
 
 func (m *message) Fail(failureCode int, message string) error {
