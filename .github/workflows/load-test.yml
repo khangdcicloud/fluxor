@@ -1,0 +1,193 @@
+name: Load Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of load test to run'
+        required: true
+        default: 'load'
+        type: choice
+        options:
+          - load
+          - spike
+          - stress
+
+jobs:
+  load-test:
+    name: K6 Load Testing
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: fluxor
+          POSTGRES_USER: fluxor
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Install k6
+      run: |
+        sudo gpg -k
+        sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+
+    - name: Build application
+      run: go build -o bin/fluxor-enterprise ./cmd/enterprise/main.go
+
+    - name: Start application
+      env:
+        PORT: 8080
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: fluxor
+        DB_USER: fluxor
+        DB_PASSWORD: password
+        JWT_SECRET: test-secret-for-ci-only
+        ENVIRONMENT: testing
+      run: |
+        ./bin/fluxor-enterprise &
+        APP_PID=$!
+        echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+        
+        # Wait for server to be ready
+        for i in {1..30}; do
+          if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+            echo "Server is ready"
+            break
+          fi
+          echo "Waiting for server... ($i/30)"
+          sleep 2
+        done
+
+    - name: Run load test
+      if: github.event.inputs.test_type == 'load' || github.event.inputs.test_type == ''
+      run: |
+        k6 run --out json=load-test-results.json loadtest/load-test.js
+      env:
+        BASE_URL: http://localhost:8080
+
+    - name: Run spike test
+      if: github.event.inputs.test_type == 'spike'
+      run: |
+        k6 run --out json=spike-test-results.json loadtest/spike-test.js
+      env:
+        BASE_URL: http://localhost:8080
+
+    - name: Run stress test
+      if: github.event.inputs.test_type == 'stress'
+      run: |
+        k6 run --out json=stress-test-results.json loadtest/stress-test.js
+      env:
+        BASE_URL: http://localhost:8080
+
+    - name: Stop application
+      if: always()
+      run: |
+        if [ -n "$APP_PID" ]; then
+          kill $APP_PID || true
+        fi
+
+    - name: Upload load test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-results-${{ github.run_number }}
+        path: |
+          *-test-results.json
+        retention-days: 30
+
+    - name: Parse and comment results
+      if: github.event_name == 'pull_request'
+      run: |
+        # Extract key metrics from results
+        if [ -f load-test-results.json ]; then
+          echo "## Load Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Load test completed. See artifacts for detailed results." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Test Type: Load Test (10k concurrent users)" >> $GITHUB_STEP_SUMMARY
+          echo "- Duration: ~10 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Target: P95 < 200ms, Error rate < 0.1%" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  performance-comparison:
+    name: Performance Comparison
+    runs-on: ubuntu-latest
+    needs: load-test
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download current results
+      uses: actions/download-artifact@v4
+      with:
+        name: load-test-results-${{ github.run_number }}
+        path: ./current
+
+    - name: Download baseline results
+      uses: actions/download-artifact@v4
+      with:
+        name: load-test-baseline
+        path: ./baseline
+      continue-on-error: true
+
+    - name: Compare results
+      run: |
+        echo "## Performance Comparison" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "./baseline" ]; then
+          echo "Comparing against baseline..." >> $GITHUB_STEP_SUMMARY
+          # Add comparison logic here
+        else
+          echo "No baseline found. This will be the new baseline." >> $GITHUB_STEP_SUMMARY
+        fi
+
+  save-baseline:
+    name: Save Performance Baseline
+    runs-on: ubuntu-latest
+    needs: load-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Download results
+      uses: actions/download-artifact@v4
+      with:
+        name: load-test-results-${{ github.run_number }}
+        path: ./results
+
+    - name: Upload as baseline
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-baseline
+        path: ./results
+        retention-days: 90
