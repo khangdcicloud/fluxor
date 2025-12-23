@@ -1,5 +1,5 @@
-//go:build !go1.24
-// +build !go1.24
+//go:build go1.24
+// +build go1.24
 
 package core
 
@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 )
+
+// Go 1.24+: Sonic benchmark is disabled (see pkg/core/json_go124.go).
 
 // BenchmarkJSONEncode benchmarks the JSON encoding wrapper
 func BenchmarkJSONEncode(b *testing.B) {
@@ -91,3 +93,4 @@ func BenchmarkJSONEncode_Parallel(b *testing.B) {
 		}
 	})
 }
+

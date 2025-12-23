@@ -20,7 +20,6 @@ func demoLoggerWithFields() {
 
 	// Log with fields included
 	loggerWithFields.Info("User logged in")
-	// Outputs: [INFO] 2025/12/23 15:05:00 User logged in map[action:login ip:192.168.1.1 user_id:123]
 }
 
 // demoLoggerWithContext demonstrates logging with request context.
@@ -37,7 +36,6 @@ func demoLoggerWithContext() {
 
 	// Log with request ID included
 	loggerWithContext.Info("Request processed")
-	// Outputs: [INFO] Request processed map[request_id:...]
 }
 
 // demoNewJSONLogger demonstrates structured JSON logging.
@@ -54,7 +52,6 @@ func demoNewJSONLogger() {
 
 	// Log messages will be in JSON format
 	loggerWithFields.WithContext(context.Background()).Info("Service started")
-	// Outputs: {"timestamp":"...","level":"INFO","message":"Service started","fields":{"service":"user-service","version":"1.0.0"}}
 }
 
 // demoLoggerEnterpriseUsage demonstrates enterprise-grade logging patterns.
@@ -84,10 +81,6 @@ func demoLoggerEnterpriseUsage() {
 		"user_id": userID,
 		"status":  "success",
 	}).Info("Request completed")
-
-	// Outputs:
-	// {"timestamp":"...","level":"INFO","message":"Request received","fields":{"endpoint":"/api/users","method":"GET","request_id":"..."}}
-	// {"timestamp":"...","level":"INFO","message":"Request completed","fields":{"endpoint":"/api/users","method":"GET","request_id":"...","status":"success","user_id":"user-123"}}
 }
 
 // demoLoggerErrorLogging demonstrates error logging with context.
@@ -105,8 +98,6 @@ func demoLoggerErrorLogging() {
 		"field":      "email",
 		"value":      "invalid-email",
 	}).Error("Validation failed")
-
-	// Outputs: [ERROR] Validation failed map[error_code:VALIDATION_ERROR field:email request_id:... value:invalid-email]
 }
 
 // Ensure demo functions are used to avoid unused function warnings
