@@ -467,7 +467,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
     vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
     
     // Create server
-    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
+    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 67)
     server := web.NewFastHTTPServer(vertx, config)
     router := server.FastRouter()
     

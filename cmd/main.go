@@ -61,13 +61,13 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 	}
 	log.Printf("Deployed verticle: %s", deploymentID)
 
-	// Create and start FastHTTP server with 60% utilization target
-	// Normal runtime: Operates at 60% capacity (3000 CCU for 5000 max)
-	// Headroom: 40% available for traffic spikes
+	// Create and start FastHTTP server with 67% utilization target
+	// Normal runtime: Operates at 67% capacity (3350 CCU for 5000 max)
+	// Headroom: 33% available for traffic spikes
 	// Overflow: Requests beyond normal capacity get 503 (fail-fast backpressure)
 	// This prevents system crash and maintains stable resource utilization
 	maxCCU := 5000
-	utilizationPercent := 60
+	utilizationPercent := 67
 	config := web.CCUBasedConfigWithUtilization(":8080", maxCCU, utilizationPercent)
 	normalCapacity := config.MaxQueue + config.Workers
 	log.Printf("Server configured: max=%d CCU, normal=%d CCU (%.0f%% utilization), workers=%d, queue=%d",

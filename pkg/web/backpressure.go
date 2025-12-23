@@ -7,9 +7,9 @@ import (
 
 // BackpressureController manages backpressure for the server
 // Ensures system stability under high load by rejecting overflow requests
-// Normal capacity is set to target utilization (e.g., 60% of max capacity)
+// Normal capacity is set to target utilization (e.g., 67% of max capacity)
 type BackpressureController struct {
-	normalCapacity int64 // Normal capacity (target utilization, e.g., 60% of max)
+	normalCapacity int64 // Normal capacity (target utilization, e.g., 67% of max)
 	currentLoad    int64 // Current load (atomic)
 	rejectedCount  int64 // Rejected requests count
 	lastReset      int64 // Last reset time (unix timestamp)
@@ -17,7 +17,7 @@ type BackpressureController struct {
 }
 
 // NewBackpressureController creates a new backpressure controller
-// normalCapacity: Target capacity for normal operations (e.g., 60% of max)
+// normalCapacity: Target capacity for normal operations (e.g., 67% of max)
 // This ensures system operates at target utilization under normal load
 func NewBackpressureController(normalCapacity int, resetIntervalSeconds int64) *BackpressureController {
 	return &BackpressureController{
@@ -31,7 +31,7 @@ func NewBackpressureController(normalCapacity int, resetIntervalSeconds int64) *
 
 // TryAcquire attempts to acquire capacity (fail-fast)
 // Returns true if normal capacity available, false if should reject (503)
-// Normal capacity = target utilization (e.g., 60% of max capacity)
+// Normal capacity = target utilization (e.g., 67% of max capacity)
 func (bc *BackpressureController) TryAcquire() bool {
 	// Reset counters periodically
 	now := time.Now().Unix()
@@ -44,7 +44,7 @@ func (bc *BackpressureController) TryAcquire() bool {
 	current := atomic.LoadInt64(&bc.currentLoad)
 	if current >= bc.normalCapacity {
 		// Fail-fast: normal capacity exceeded, reject immediately
-		// This maintains target utilization (e.g., 60%) under normal conditions
+		// This maintains target utilization (e.g., 67%) under normal conditions
 		atomic.AddInt64(&bc.rejectedCount, 1)
 		return false
 	}

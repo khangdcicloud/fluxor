@@ -187,7 +187,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
     }
 
     // Create and configure HTTP server
-    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
+    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 67)
     server := web.NewFastHTTPServer(vertx, config)
     
     // Setup routes
@@ -436,7 +436,7 @@ type ServerMetrics struct {
 - **Bounded queue**: 10,000 request capacity (configurable)
 - **Worker pool**: 100 worker goroutines (configurable)
 - **CCU-based backpressure**: Two-layer backpressure system
-  - Normal capacity: Operates at target utilization (e.g., 60% of max CCU)
+  - Normal capacity: Operates at target utilization (e.g., 67% of max CCU)
   - Queue-based: Additional protection when queue is full
   - Returns 503 when capacity exceeded (fail-fast)
 - **JSON-first**: Default response format is JSON (using Sonic for encoding)
@@ -941,7 +941,7 @@ The Logger interface can be swapped with custom implementations (e.g., Zap, Logr
   - `Workers`: Number of worker goroutines
   
 - **CCU Metrics**:
-  - `NormalCCU`: Normal capacity (target utilization, e.g., 60% of max)
+  - `NormalCCU`: Normal capacity (target utilization, e.g., 67% of max)
   - `CurrentCCU`: Current concurrent request load
   - `CCUUtilization`: Utilization relative to normal capacity
 

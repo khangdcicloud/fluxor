@@ -23,17 +23,17 @@ func TestCCUBasedConfig(t *testing.T) {
 
 func TestCCUBasedConfigWithUtilization(t *testing.T) {
 	maxCCU := 5000
-	utilizationPercent := 60
+	utilizationPercent := 67
 	config := CCUBasedConfigWithUtilization(":8080", maxCCU, utilizationPercent)
 	
-	// Calculate expected normal capacity (60% of max)
+	// Calculate expected normal capacity (67% of max)
 	expectedNormalCapacity := int(float64(maxCCU) * float64(utilizationPercent) / 100.0)
 	actualNormalCapacity := config.MaxQueue + config.Workers
 	
 	// Allow some tolerance for rounding
 	tolerance := 50
 	if actualNormalCapacity < expectedNormalCapacity-tolerance || actualNormalCapacity > expectedNormalCapacity+tolerance {
-		t.Errorf("Normal capacity = %d, want ~%d (60%% of %d)", actualNormalCapacity, expectedNormalCapacity, maxCCU)
+		t.Errorf("Normal capacity = %d, want ~%d (67%% of %d)", actualNormalCapacity, expectedNormalCapacity, maxCCU)
 	}
 	
 	if config.Workers < 50 {
@@ -51,8 +51,8 @@ func TestCCUBasedConfigWithUtilization(t *testing.T) {
 }
 
 func TestBackpressureController(t *testing.T) {
-	normalCapacity := 3000 // 60% of 5000 max
-	bc := NewBackpressureController(normalCapacity, 60)
+	normalCapacity := 3350 // 67% of 5000 max
+	bc := NewBackpressureController(normalCapacity, 67)
 	
 	// Test capacity acquisition (up to normal capacity)
 	for i := 0; i < normalCapacity; i++ {

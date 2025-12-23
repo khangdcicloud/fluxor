@@ -38,7 +38,7 @@ Think of Fluxor as a **framework that helps you build** applications faster, saf
 - **Concurrency abstractions** for building concurrent applications without complexity
 - **Fail-fast error handling** for building predictable, reliable systems
 - **JSON-first** data format for building interoperable APIs
-- **60% resource utilization** target for building stable, production systems
+- **67% resource utilization** target for building stable, production systems
 
 ### Philosophy: Framework for Building
 
@@ -113,7 +113,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
     eventBus := deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()].(core.EventBus)
     
     // Create HTTP server
-    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
+    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 67)
     server := web.NewFastHTTPServer(vertx, config)
     
     // Setup routes
@@ -328,7 +328,7 @@ func (v *AsyncVerticle) AsyncStop(ctx core.FluxorContext, resultHandler func(err
 ### Basic Setup
 
 ```go
-// Configure for 60% utilization (5000 max CCU = 3000 normal)
+// Configure for 67% utilization (5000 max CCU = 3350 normal)
 config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
 server := web.NewFastHTTPServer(vertx, config)
 
@@ -677,10 +677,10 @@ eventBus.Publish("user.created", map[string]interface{}{
 
 ### 4. Resource Utilization
 
-Configure servers for 60% utilization to leave headroom:
+Configure servers for 67% utilization to leave headroom:
 
 ```go
-// 60% of 5000 = 3000 normal capacity
+// 67% of 5000 = 3350 normal capacity
 config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
 ```
 
@@ -766,7 +766,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
     }
     
     // Create HTTP server
-    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 60)
+    config := web.CCUBasedConfigWithUtilization(":8080", 5000, 67)
     server := web.NewFastHTTPServer(vertx, config)
     router := server.FastRouter()
     
@@ -908,7 +908,7 @@ Fluxor provides a **reactive runtime** for building high-performance, event-driv
 - **Verticle-based**: Deploy isolated components
 - **Fail-fast**: Errors detected and reported immediately
 - **JSON-first**: All messages automatically JSON-encoded
-- **60% utilization**: Configure for stability with headroom
+- **67% utilization**: Configure for stability with headroom
 
 For more details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 

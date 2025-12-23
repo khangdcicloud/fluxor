@@ -187,9 +187,9 @@ router.GETFast("/api/metrics", func(ctx *web.FastRequestContext) error {
 Configure server capacity with utilization targets:
 
 ```go
-// Configure for 60% utilization (leaves 40% headroom for spikes)
+// Configure for 67% utilization (leaves 33% headroom for spikes)
 maxCCU := 5000
-utilizationPercent := 60
+utilizationPercent := 67
 config := web.CCUBasedConfigWithUtilization(":8080", maxCCU, utilizationPercent)
 server := web.NewFastHTTPServer(vertx, config)
 // Server automatically returns 503 when capacity exceeded
@@ -256,7 +256,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 
     // Create FastHTTP server with CCU-based backpressure
     maxCCU := 5000
-    utilizationPercent := 60
+    utilizationPercent := 67
     config := web.CCUBasedConfigWithUtilization(":8080", maxCCU, utilizationPercent)
     server := web.NewFastHTTPServer(vertx, config)
 

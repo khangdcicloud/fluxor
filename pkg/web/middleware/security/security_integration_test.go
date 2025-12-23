@@ -13,7 +13,7 @@ func TestSecurityMiddleware(t *testing.T) {
 	// Create a test server context
 	vertx := core.NewVertx(context.Background())
 	defer vertx.Close()
-	config := web.CCUBasedConfigWithUtilization(":8080", 1000, 60)
+	config := web.CCUBasedConfigWithUtilization(":8080", 1000, 67)
 	server := web.NewFastHTTPServer(vertx, config)
 	router := server.FastRouter()
 

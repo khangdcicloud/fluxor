@@ -488,7 +488,7 @@ func setupTestServer(t *testing.T) *web.FastHTTPServer {
     t.Helper()
     ctx := context.Background()
     vertx := core.NewVertx(ctx)
-    config := web.CCUBasedConfigWithUtilization(":0", 100, 60)
+    config := web.CCUBasedConfigWithUtilization(":0", 100, 67)
     return web.NewFastHTTPServer(vertx, config)
 }
 ```
