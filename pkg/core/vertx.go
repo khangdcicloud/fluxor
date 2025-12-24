@@ -37,8 +37,27 @@ type vertx struct {
 	logger      Logger // Added logger
 }
 
+// VertxOptions configures Vertx construction.
+type VertxOptions struct {
+	// EventBusFactory allows swapping the default in-memory EventBus with a custom implementation
+	// (e.g., a clustered EventBus backed by NATS).
+	//
+	// The factory is called after the Vertx struct is created so implementations can reference Vertx.
+	EventBusFactory func(ctx context.Context, vertx Vertx) (EventBus, error)
+}
+
 // NewVertx creates a new Vertx instance
 func NewVertx(ctx context.Context) Vertx {
+	vx, err := NewVertxWithOptions(ctx, VertxOptions{})
+	if err != nil {
+		// Fail-fast: default construction should not fail.
+		panic(err)
+	}
+	return vx
+}
+
+// NewVertxWithOptions creates a new Vertx instance with configurable EventBus.
+func NewVertxWithOptions(ctx context.Context, opts VertxOptions) (Vertx, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	v := &vertx{
 		deployments: make(map[string]*deployment),
@@ -46,9 +65,20 @@ func NewVertx(ctx context.Context) Vertx {
 		cancel:      cancel,
 		logger:      NewDefaultLogger(), // Initialize logger
 	}
-	// Create EventBus with Vertx reference (needed for creating FluxorContext in consumers)
+
+	if opts.EventBusFactory != nil {
+		bus, err := opts.EventBusFactory(ctx, v)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		v.eventBus = bus
+		return v, nil
+	}
+
+	// Default: in-memory EventBus.
 	v.eventBus = NewEventBus(ctx, v)
-	return v
+	return v, nil
 }
 
 func (v *vertx) EventBus() EventBus {

@@ -248,6 +248,30 @@ consumer.Handler(func(ctx core.FluxorContext, msg core.Message) error {
 })
 ```
 
+### Cluster EventBus (NATS)
+
+By default, Fluxor's `EventBus` is **in-memory** (single process). If you need **service-to-service** messaging,
+you can use the NATS-backed clustered EventBus:
+
+```go
+import (
+    "context"
+    "github.com/fluxorio/fluxor/pkg/core"
+)
+
+v, err := core.NewVertxWithOptions(context.Background(), core.VertxOptions{
+    EventBusFactory: func(ctx context.Context, vertx core.Vertx) (core.EventBus, error) {
+        return core.NewClusterEventBusNATS(ctx, vertx, core.ClusterNATSConfig{
+            URL:    "nats://127.0.0.1:4222",
+            Prefix: "fluxor.prod", // subject prefix / namespace
+        })
+    },
+})
+if err != nil { panic(err) }
+
+// Use v.EventBus() normally (Publish / Send / Request).
+```
+
 ---
 
 ## Verticles
