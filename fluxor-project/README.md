@@ -11,7 +11,7 @@ This folder shows how to build multiple services (`api-gateway`, `payment-servic
 Run a local NATS server (example):
 
 ```bash
-nats-server -p 4222
+nats-server -js -p 4222
 ```
 
 ## Run services (separate processes)

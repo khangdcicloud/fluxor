@@ -17,9 +17,10 @@ func main() {
 			natsCfg, _ := cfg["nats"].(map[string]any)
 			url, _ := natsCfg["url"].(string)
 			prefix, _ := natsCfg["prefix"].(string)
-			return core.NewClusterEventBusNATS(ctx, vertx, core.ClusterNATSConfig{
-				URL:    url,
-				Prefix: prefix,
+			return core.NewClusterEventBusJetStream(ctx, vertx, core.ClusterJetStreamConfig{
+				URL:     url,
+				Prefix:  prefix,
+				Service: "all-in-one",
 			})
 		},
 	})
