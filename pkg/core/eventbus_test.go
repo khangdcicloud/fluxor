@@ -37,10 +37,27 @@ func TestEventBus_Send(t *testing.T) {
 	eb := vertx.EventBus()
 	defer eb.Close()
 
+	// Test fail-fast: empty address
+	err := eb.Send("", "test")
+	if err == nil {
+		t.Error("Send() with empty address should fail")
+	}
+
+	// Test fail-fast: nil body
+	err = eb.Send("test.address", nil)
+	if err == nil {
+		t.Error("Send() with nil body should fail")
+	}
+
 	// Test fail-fast: no handlers
-	err := eb.Send("test.address", "test")
+	err = eb.Send("test.address", "test")
 	if err == nil {
 		t.Error("Send() with no handlers should fail")
+	}
+	if ce, ok := err.(*Error); ok {
+		if ce.Code != "NO_HANDLERS" {
+			t.Fatalf("Send() error code = %q, want %q", ce.Code, "NO_HANDLERS")
+		}
 	}
 
 	// Register handler
@@ -77,6 +94,29 @@ func TestEventBus_Request(t *testing.T) {
 		t.Error("Request() with zero timeout should fail")
 	}
 
+	// Test fail-fast: empty address
+	_, err = eb.Request("", "test", 1*time.Second)
+	if err == nil {
+		t.Error("Request() with empty address should fail")
+	}
+
+	// Test fail-fast: nil body
+	_, err = eb.Request("test.address", nil, 1*time.Second)
+	if err == nil {
+		t.Error("Request() with nil body should fail")
+	}
+
+	// Test fail-fast: no handlers
+	_, err = eb.Request("no.handlers", "test", 1*time.Second)
+	if err == nil {
+		t.Error("Request() with no handlers should fail")
+	}
+	if ce, ok := err.(*Error); ok {
+		if ce.Code != "NO_HANDLERS" {
+			t.Fatalf("Request() error code = %q, want %q", ce.Code, "NO_HANDLERS")
+		}
+	}
+
 	// Register handler
 	consumer := eb.Consumer("test.address")
 	consumer.Handler(func(ctx FluxorContext, msg Message) error {
@@ -107,4 +147,19 @@ func TestEventBus_Consumer(t *testing.T) {
 	}()
 
 	eb.Consumer("")
+}
+
+func TestConsumer_Handler_FailFast_NilHandlerPanics(t *testing.T) {
+	ctx := context.Background()
+	vertx := NewVertx(ctx)
+	eb := vertx.EventBus()
+	defer eb.Close()
+
+	c := eb.Consumer("test.address")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Handler(nil) should panic (fail-fast)")
+		}
+	}()
+	c.Handler(nil)
 }

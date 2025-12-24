@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 )
 
 type testVerticle struct {
@@ -86,5 +88,54 @@ func TestVertx_EventBus(t *testing.T) {
 	eb := vertx.EventBus()
 	if eb == nil {
 		t.Error("EventBus() should not return nil")
+	}
+}
+
+func TestNewVertxWithOptions_FailFast_EventBusFactoryErrorCancelsContext(t *testing.T) {
+	parent := context.Background()
+
+	wantErr := errors.New("factory failed")
+	var factoryCtx context.Context
+
+	vx, err := NewVertxWithOptions(parent, VertxOptions{
+		EventBusFactory: func(ctx context.Context, _ Vertx) (EventBus, error) {
+			factoryCtx = ctx
+			return nil, wantErr
+		},
+	})
+	if err == nil {
+		t.Fatalf("NewVertxWithOptions() expected error, got nil (vx=%v)", vx)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("NewVertxWithOptions() error = %v, want %v", err, wantErr)
+	}
+	if factoryCtx == nil {
+		t.Fatalf("expected factory to be invoked and capture ctx")
+	}
+
+	select {
+	case <-factoryCtx.Done():
+		// ok: fail-fast cleanup should cancel internal ctx
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("expected internal context to be cancelled on factory error")
+	}
+}
+
+type failingStartVerticle struct{}
+
+func (v *failingStartVerticle) Start(ctx FluxorContext) error { return errors.New("start failed") }
+func (v *failingStartVerticle) Stop(ctx FluxorContext) error  { return nil }
+
+func TestVertx_DeployVerticle_FailFast_StartError(t *testing.T) {
+	ctx := context.Background()
+	vertx := NewVertx(ctx)
+	defer vertx.Close()
+
+	id, err := vertx.DeployVerticle(&failingStartVerticle{})
+	if err == nil {
+		t.Fatalf("DeployVerticle() expected error when Start() fails")
+	}
+	if id != "" {
+		t.Fatalf("DeployVerticle() id = %q, want empty on start failure", id)
 	}
 }

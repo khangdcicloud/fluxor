@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/fluxorio/fluxor/pkg/observability/prometheus"
@@ -25,7 +26,7 @@ func MetricsMiddleware() web.FastMiddleware {
 			duration := time.Since(start)
 			status := "200"
 			if ctx.RequestCtx.Response.StatusCode() != 0 {
-				status = string(ctx.RequestCtx.Response.StatusCode())
+				status = strconv.Itoa(ctx.RequestCtx.Response.StatusCode())
 			}
 			responseSize := int64(len(ctx.RequestCtx.Response.Body()))
 

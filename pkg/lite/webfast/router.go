@@ -237,5 +237,8 @@ func b2s(b []byte) string {
 	if len(b) == 0 {
 		return ""
 	}
+	// #nosec G103 -- performance-critical, zero-copy conversion.
+	// The resulting string only lives within the request handling path and must
+	// not be stored beyond the request lifetime.
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }

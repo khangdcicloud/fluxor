@@ -128,7 +128,10 @@ jobs:
     - name: Run Gosec Security Scanner
       uses: securego/gosec@master
       with:
-        args: '-no-fail -fmt sarif -out results.sarif ./...'
+        # Scan only the root module code. This repo also contains nested Go
+        # modules under examples/fluxor-project/* which gosec cannot analyze correctly
+        # from the repository root context.
+        args: '-no-fail -fmt sarif -out results.sarif ./cmd/... ./pkg/...'
 
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3

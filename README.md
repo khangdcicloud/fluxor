@@ -341,6 +341,36 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 }
 ```
 
+## Simple bootstrap API (DeployVerticle + Start)
+
+If you prefer a “Vert.x-like” main:
+
+```go
+package main
+
+import (
+	"github.com/fluxorio/fluxor/pkg/fluxor"
+	"github.com/fluxorio/fluxor/pkg/core"
+)
+
+type ApiGatewayVerticle struct{}
+func (v *ApiGatewayVerticle) Start(ctx core.FluxorContext) error { return nil }
+func (v *ApiGatewayVerticle) Stop(ctx core.FluxorContext) error  { return nil }
+
+func main() {
+	app, err := fluxor.NewMainVerticle("config.json")
+	if err != nil {
+		panic(err)
+	}
+
+	// Decide deploy order here
+	_, _ = app.DeployVerticle(&ApiGatewayVerticle{})
+
+	// Blocks until SIGINT/SIGTERM
+	_ = app.Start()
+}
+```
+
 ## Features
 
 ### Core Features
