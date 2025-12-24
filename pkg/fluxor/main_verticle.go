@@ -25,9 +25,27 @@ type MainVerticle struct {
 	deploymentIDs []string
 }
 
+// MainVerticleOptions configures NewMainVerticleWithOptions.
+type MainVerticleOptions struct {
+	// EventBusFactory allows switching the default in-memory EventBus to a clustered implementation
+	// (e.g., NATS) while still using the "main-like" bootstrap API.
+	//
+	// cfg is the loaded config map (json/yaml). Treat as read-only by convention.
+	EventBusFactory func(ctx context.Context, vertx core.Vertx, cfg map[string]any) (core.EventBus, error)
+
+	// VertxOptions are passed to core.NewVertxWithOptions. If EventBusFactory is set,
+	// it takes precedence over VertxOptions.EventBusFactory.
+	VertxOptions core.VertxOptions
+}
+
 // NewMainVerticle loads config from path (json/yaml) and creates an app runtime.
 // If configPath is empty, config is an empty map.
 func NewMainVerticle(configPath string) (*MainVerticle, error) {
+	return NewMainVerticleWithOptions(configPath, MainVerticleOptions{})
+}
+
+// NewMainVerticleWithOptions is like NewMainVerticle but allows customizing the underlying Vertx/EventBus.
+func NewMainVerticleWithOptions(configPath string, opts MainVerticleOptions) (*MainVerticle, error) {
 	rootCtx, cancel := context.WithCancel(context.Background())
 
 	cfg := make(map[string]any)
@@ -38,7 +56,18 @@ func NewMainVerticle(configPath string) (*MainVerticle, error) {
 		}
 	}
 
-	vx := core.NewVertx(rootCtx)
+	vopts := opts.VertxOptions
+	if opts.EventBusFactory != nil {
+		vopts.EventBusFactory = func(ctx context.Context, vertx core.Vertx) (core.EventBus, error) {
+			return opts.EventBusFactory(ctx, vertx, cfg)
+		}
+	}
+
+	vx, err := core.NewVertxWithOptions(rootCtx, vopts)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 
 	return &MainVerticle{
 		ctx:    rootCtx,

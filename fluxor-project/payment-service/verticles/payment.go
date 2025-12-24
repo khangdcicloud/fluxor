@@ -11,10 +11,25 @@ type PaymentVerticle struct{}
 func NewPaymentVerticle() *PaymentVerticle { return &PaymentVerticle{} }
 
 func (v *PaymentVerticle) Start(ctx core.FluxorContext) error {
-	// Example: consume events
-	ctx.EventBus().Consumer("payments.create").Handler(func(c core.FluxorContext, msg core.Message) error {
-		_ = ctx.EventBus().Publish("logs", contracts.LogEvent{Service: "payment-service", Message: "payment created"})
-		return msg.Reply(map[string]any{"ok": true})
+	bus := ctx.EventBus()
+
+	// Example: Request/Reply from api-gateway.
+	bus.Consumer(contracts.AddressPaymentsAuthorize).Handler(func(c core.FluxorContext, msg core.Message) error {
+		body, ok := msg.Body().([]byte)
+		if !ok {
+			_ = bus.Publish(contracts.AddressLogs, contracts.LogEvent{Service: "payment-service", Message: "invalid payload type"})
+			return msg.Reply(contracts.PaymentAuthorizeReply{OK: false, Error: "invalid_request"})
+		}
+
+		var req contracts.PaymentAuthorizeRequest
+		if err := core.JSONDecode(body, &req); err != nil {
+			_ = bus.Publish(contracts.AddressLogs, contracts.LogEvent{Service: "payment-service", Message: "invalid json"})
+			return msg.Reply(contracts.PaymentAuthorizeReply{OK: false, Error: "invalid_request"})
+		}
+
+		// Simulate authorization.
+		_ = bus.Publish(contracts.AddressLogs, contracts.LogEvent{Service: "payment-service", Message: "authorized " + req.PaymentID})
+		return msg.Reply(contracts.PaymentAuthorizeReply{OK: true, AuthID: "auth_" + req.PaymentID})
 	})
 	return nil
 }
