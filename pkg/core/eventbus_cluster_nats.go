@@ -394,6 +394,17 @@ func (m *clusterNATSMessage) Reply(body interface{}) error {
 	return m.eb.nc.PublishMsg(reply)
 }
 
+func (m *clusterNATSMessage) DecodeBody(v interface{}) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, ok := m.body.([]byte)
+	if !ok {
+		return fmt.Errorf("body is not []byte, got %T", m.body)
+	}
+	return JSONDecode(data, v)
+}
+
 func (m *clusterNATSMessage) Fail(failureCode int, message string) error {
 	return m.Reply(map[string]interface{}{
 		"failureCode": failureCode,

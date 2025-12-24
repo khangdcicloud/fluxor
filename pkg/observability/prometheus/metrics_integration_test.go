@@ -222,6 +222,7 @@ func TestMetricsCollection(t *testing.T) {
 			150,   // current CCU
 			670,   // normal CCU
 			22.39, // utilization
+			5,     // verticle count
 		)
 
 		// Should not panic
