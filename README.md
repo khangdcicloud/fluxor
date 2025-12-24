@@ -20,11 +20,29 @@ Fluxor is a reactive programming framework that provides:
 cmd/
   main.go          - Application entry point
 
+  lite/main.go     - Minimal (acyclic) example entry point
+
 pkg/
   core/            - Core abstractions (EventBus, Verticle, Context, Vertx)
   fx/              - Dependency injection and lifecycle management
   web/             - HTTP/WebSocket abstractions
   fluxor/          - Main framework with runtime abstraction over gostacks
+
+  lite/            - Minimal, acyclic package graph (core/fx/web/fluxor)
+```
+
+## Minimal (acyclic) architecture (optional)
+
+If you want a very small dependency graph (no circular dependencies) closer to the “4 package” layout, see:
+- `pkg/lite/core`: `Component`, `Bus`, `WorkerPool`, `FluxorContext`
+- `pkg/lite/fx`: HTTP-friendly context helpers (`Ok`, `Error`)
+- `pkg/lite/web`: `Router` + `HttpVerticle`
+- `pkg/lite/fluxor`: `App` runtime (`Deploy`, `Run`)
+
+Run the demo:
+
+```bash
+go run ./cmd/lite
 ```
 
 ## Core Concepts
