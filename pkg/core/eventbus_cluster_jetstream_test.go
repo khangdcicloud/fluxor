@@ -160,3 +160,44 @@ func TestClusterEventBusJetStream_PublishAndSend(t *testing.T) {
 		t.Fatalf("expected send distribution across workers, got w1=%d w2=%d", atomic.LoadInt64(&w1Count), atomic.LoadInt64(&w2Count))
 	}
 }
+
+func TestNewClusterEventBusJetStream_FailFast_InvalidInputs(t *testing.T) {
+	s := runTestNATSJetStreamServer(t)
+	url := s.ClientURL()
+
+	t.Run("nil ctx", func(t *testing.T) {
+		v := NewVertx(context.Background())
+		defer func() { _ = v.Close() }()
+
+		if _, err := NewClusterEventBusJetStream(nil, v, ClusterJetStreamConfig{
+			URL:     url,
+			Prefix:  "fluxor.js.failfast",
+			Service: "svc",
+		}); err == nil {
+			t.Fatalf("expected error for nil ctx")
+		}
+	})
+
+	t.Run("nil vertx", func(t *testing.T) {
+		if _, err := NewClusterEventBusJetStream(context.Background(), nil, ClusterJetStreamConfig{
+			URL:     url,
+			Prefix:  "fluxor.js.failfast",
+			Service: "svc",
+		}); err == nil {
+			t.Fatalf("expected error for nil vertx")
+		}
+	})
+
+	t.Run("missing service", func(t *testing.T) {
+		v := NewVertx(context.Background())
+		defer func() { _ = v.Close() }()
+
+		if _, err := NewClusterEventBusJetStream(context.Background(), v, ClusterJetStreamConfig{
+			URL:    url,
+			Prefix: "fluxor.js.failfast",
+			// Service intentionally missing
+		}); err == nil {
+			t.Fatalf("expected error for missing service")
+		}
+	})
+}

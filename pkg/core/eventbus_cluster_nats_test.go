@@ -159,3 +159,23 @@ func TestClusterEventBusNATS_PublishSendRequest(t *testing.T) {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
+
+func TestNewClusterEventBusNATS_FailFast_InvalidInputs(t *testing.T) {
+	s := runTestNATSServer(t)
+	url := s.ClientURL()
+
+	v := NewVertx(context.Background())
+	defer func() { _ = v.Close() }()
+
+	t.Run("nil ctx", func(t *testing.T) {
+		if _, err := NewClusterEventBusNATS(nil, v, ClusterNATSConfig{URL: url}); err == nil {
+			t.Fatalf("expected error for nil ctx")
+		}
+	})
+
+	t.Run("nil vertx", func(t *testing.T) {
+		if _, err := NewClusterEventBusNATS(context.Background(), nil, ClusterNATSConfig{URL: url}); err == nil {
+			t.Fatalf("expected error for nil vertx")
+		}
+	})
+}
