@@ -20,12 +20,49 @@ Fluxor is a reactive programming framework that provides:
 cmd/
   main.go          - Application entry point
 
+  lite/main.go     - Minimal (acyclic) example entry point
+
 pkg/
   core/            - Core abstractions (EventBus, Verticle, Context, Vertx)
   fx/              - Dependency injection and lifecycle management
   web/             - HTTP/WebSocket abstractions
   fluxor/          - Main framework with runtime abstraction over gostacks
+
+  lite/            - Minimal, acyclic package graph (core/fx/web/fluxor)
 ```
+
+## Minimal (acyclic) architecture (optional)
+
+If you want a very small dependency graph (no circular dependencies) closer to the “4 package” layout, see:
+- `pkg/lite/core`: `Component`, `Bus`, `WorkerPool`, `FluxorContext`
+- `pkg/lite/fx`: HTTP-friendly context helpers (`Ok`, `Error`)
+- `pkg/lite/web`: `Router` + `HttpVerticle`
+- `pkg/lite/fluxor`: `App` runtime (`Deploy`, `Run`)
+
+Run the demo:
+
+```bash
+go run ./cmd/lite
+```
+
+## Lite-fast (fasthttp, high-RPS)
+
+If your target is **hundreds of thousands of RPS**, use the fasthttp-based lite variant:
+
+```bash
+go run ./cmd/litefast
+```
+
+Load test (example with `wrk`):
+
+```bash
+wrk -t8 -c512 -d30s http://127.0.0.1:8080/ping
+```
+
+Practical notes for high RPS:
+- Prefer **`Text`** responses over JSON for peak throughput.
+- Keep handlers allocation-free; avoid capturing request context into goroutines.
+- Set OS limits (ulimit), pin CPU, and tune `GOMAXPROCS` for your machine.
 
 ## Core Concepts
 
