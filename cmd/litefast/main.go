@@ -13,9 +13,15 @@ func main() {
 	router := webfast.NewRouter()
 
 	// For 500k RPS testing, keep handler extremely small and avoid JSON.
-	router.GET("/ping", func(c *fx.FastContext) error {
-		return c.Text(200, "pong")
-	})
+	router.GET("/ping",
+		func(c *fx.FastContext) error {
+			return c.Text(200, "pong")
+		},
+		webfast.Cache(webfast.CacheConfig{
+			CacheControl: "public, max-age=60, immutable",
+			ETag:         `"ping-v1"`,
+		}),
+	)
 
 	router.GET("/users/:id", func(c *fx.FastContext) error {
 		return c.Text(200, c.Param("id"))
