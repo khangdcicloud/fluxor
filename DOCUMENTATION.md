@@ -12,6 +12,7 @@
 8. [Workflows](#workflows)
 9. [Best Practices](#best-practices)
 10. [Examples](#examples)
+11. [Interface-first & Contract Specs](#interface-first--contract-specs)
 
 ---
 
@@ -737,6 +738,13 @@ router.GETFast("/api/data", func(ctx *web.FastRequestContext) error {
     return ctx.JSON(200, data)
 })
 ```
+
+---
+
+## Interface-first & Contract Specs
+
+- `docs/clarity/06-interface-first-and-contracts.md` — how we do interface-first + contract specs (code is truth)
+- `docs/clarity/05-tcp-contract.md` — concrete example: TCP server contract
 
 ---
 

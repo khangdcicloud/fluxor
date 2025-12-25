@@ -216,6 +216,17 @@ func (v *PaymentVerticle) Stop(ctx core.FluxorContext) error {
               └── Deploy: WorkerVerticle
 ```
 
+### Interface-first & Contract Specs (Code is Truth)
+
+When you add a new module (e.g. `pkg/tcp`), follow:
+- **Interface-first** (define `pkg/<module>/server.go` / interfaces first)
+- **Contract spec** in `docs/clarity/*-contract.md`
+- **Tests-as-contract** to keep docs aligned with real behavior
+
+See:
+- `docs/clarity/06-interface-first-and-contracts.md`
+- `docs/clarity/05-tcp-contract.md`
+
 ### 2. Config Injection
 
 ```go
