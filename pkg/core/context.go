@@ -4,9 +4,17 @@ import (
 	"context"
 )
 
-// FluxorContext represents the execution context for a verticle or handler
+// FluxorContext represents the execution context for a verticle or handler.
+//
+// This is distinct from context.Context (Go's standard context):
+//   - context.Context: Go's cancellation/deadline/value propagation
+//   - FluxorContext: Fluxor's runtime context with access to Vertx, EventBus, Config
+//
+// FluxorContext wraps a context.Context and provides additional Fluxor-specific
+// functionality. Use Context() to get the underlying context.Context when needed
+// for cancellation or passing to Go standard library functions.
 type FluxorContext interface {
-	// Context returns the underlying context.Context
+	// Context returns the underlying context.Context (Go's standard context)
 	Context() context.Context
 
 	// EventBus returns the event bus instance
@@ -30,25 +38,32 @@ type FluxorContext interface {
 
 // vertxContext implements FluxorContext
 type vertxContext struct {
-	ctx    context.Context
+	goCtx  context.Context // renamed from 'ctx' for clarity: this is Go's context.Context
 	vertx  Vertx
 	config map[string]interface{}
 }
 
-func newContext(ctx context.Context, vertx Vertx) FluxorContext {
-	if ctx == nil {
+// newFluxorContext creates a new FluxorContext wrapping the given context.Context.
+// This is an internal function - renamed from 'newContext' for clarity.
+//
+// Parameters:
+//   - goCtx: the Go context.Context to wrap (typically from Vertx.rootCtx)
+//   - vertx: the Vertx instance for accessing EventBus and deploying verticles
+func newFluxorContext(goCtx context.Context, vertx Vertx) FluxorContext {
+	if goCtx == nil {
 		// Fail-fast: context cannot be nil
 		panic("context cannot be nil")
 	}
 	return &vertxContext{
-		ctx:    ctx,
+		goCtx:  goCtx,
 		vertx:  vertx,
 		config: make(map[string]interface{}),
 	}
 }
 
+// Context returns the underlying context.Context (Go's standard context)
 func (c *vertxContext) Context() context.Context {
-	return c.ctx
+	return c.goCtx
 }
 
 func (c *vertxContext) EventBus() EventBus {

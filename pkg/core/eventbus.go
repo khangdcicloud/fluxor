@@ -95,25 +95,50 @@ func (m *message) Fail(failureCode int, message string) error {
 	})
 }
 
-// EventBus provides publish-subscribe and point-to-point messaging
-// Default data format is JSON
+// EventBus provides publish-subscribe and point-to-point messaging.
+// Default data format is JSON.
+//
+// Thread-safety: All methods are safe for concurrent use.
+//
+// Error handling patterns:
+//   - Publish, Send, Request: return errors for invalid inputs or failures
+//   - Consumer: PANICS on invalid address (fail-fast for programmer errors)
+//
+// The different error handling for Consumer is intentional:
+//   - Invalid address in Consumer is a programming bug (should be caught in dev)
+//   - Runtime errors in Publish/Send/Request are expected (network issues, etc.)
 type EventBus interface {
-	// Publish publishes a message to all handlers registered for the address
-	// Body is automatically JSON encoded if not already []byte
+	// Publish publishes a message to all handlers registered for the address.
+	// Body is automatically JSON encoded if not already []byte.
+	// Returns error if address is invalid or encoding fails.
 	Publish(address string, body interface{}) error
 
-	// Send sends a point-to-point message
-	// Body is automatically JSON encoded if not already []byte
+	// Send sends a point-to-point message to one handler.
+	// Body is automatically JSON encoded if not already []byte.
+	// Returns error if address is invalid, no handlers registered, or encoding fails.
 	Send(address string, body interface{}) error
 
-	// Request sends a message and expects a reply
-	// Body is automatically JSON encoded if not already []byte
+	// Request sends a message and expects a reply within timeout.
+	// Body is automatically JSON encoded if not already []byte.
+	// Returns error if address is invalid, no handlers, timeout exceeded, or encoding fails.
 	Request(address string, body interface{}, timeout time.Duration) (Message, error)
 
-	// Consumer creates a consumer for the given address
+	// Consumer creates a consumer for the given address.
+	//
+	// IMPORTANT: This method PANICS if address is invalid (empty or too long).
+	// This is intentional fail-fast behavior for programmer errors.
+	// Invalid addresses should be caught during development, not at runtime.
+	//
+	// Usage pattern:
+	//   consumer := eb.Consumer("my.address").Handler(func(ctx FluxorContext, msg Message) error {
+	//       // handle message
+	//       return nil
+	//   })
+	//   defer consumer.Unregister()
 	Consumer(address string) Consumer
 
-	// Close closes the event bus
+	// Close closes the event bus and releases all resources.
+	// After Close, all other methods will fail.
 	Close() error
 }
 

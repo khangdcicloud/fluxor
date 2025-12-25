@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-func TestNewContext(t *testing.T) {
+func TestNewFluxorContext(t *testing.T) {
 	ctx := context.Background()
 	vertx := NewVertx(ctx)
 	defer vertx.Close()
 
-	fluxorCtx := newContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, vertx)
 
 	if fluxorCtx == nil {
-		t.Error("newContext() should not return nil")
+		t.Error("newFluxorContext() should not return nil")
 	}
 
 	if fluxorCtx.Context() == nil {
@@ -34,7 +34,7 @@ func TestFluxorContext_Config(t *testing.T) {
 	vertx := NewVertx(ctx)
 	defer vertx.Close()
 
-	fluxorCtx := newContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, vertx)
 
 	// Test setting config
 	fluxorCtx.SetConfig("key1", "value1")
@@ -55,7 +55,7 @@ func TestFluxorContext_Deploy(t *testing.T) {
 	vertx := NewVertx(ctx)
 	defer vertx.Close()
 
-	fluxorCtx := newContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, vertx)
 
 	verticle := &testVerticle{}
 	deploymentID, err := fluxorCtx.Deploy(verticle)
@@ -78,7 +78,7 @@ func TestFluxorContext_Undeploy(t *testing.T) {
 	vertx := NewVertx(ctx)
 	defer vertx.Close()
 
-	fluxorCtx := newContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, vertx)
 
 	verticle := &testVerticle{}
 	deploymentID, err := fluxorCtx.Deploy(verticle)

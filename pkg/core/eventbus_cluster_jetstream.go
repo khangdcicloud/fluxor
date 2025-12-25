@@ -495,7 +495,7 @@ func (c *clusterJSConsumer) handleMsg(nm *nats.Msg) error {
 	if rid := nm.Header.Get("X-Request-ID"); rid != "" {
 		base = WithRequestID(base, rid)
 	}
-	fctx := newContext(base, c.eb.vertx)
+	fctx := newFluxorContext(base, c.eb.vertx)
 
 	headers := make(map[string]string)
 	for k, v := range nm.Header {

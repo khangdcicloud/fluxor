@@ -47,7 +47,7 @@ func (r *ReactorRuntime) Deploy(reactor Reactor, config map[string]any) string {
 	id := uuid.New().String()
 
 	// Create FluxorContext using vertx
-	fctx := newContext(r.ctx, r.vertx)
+	fctx := newFluxorContext(r.ctx, r.vertx)
 	if config != nil {
 		for k, v := range config {
 			fctx.SetConfig(k, v)
@@ -119,25 +119,28 @@ func (r *ReactorRuntime) Shutdown() {
 	}
 }
 
-// newContext creates a FluxorContext (using internal newContext function)
-func newContext(ctx context.Context, vertx core.Vertx) core.FluxorContext {
-	// Use the internal newContext from core package
-	// Since it's not exported, we need to create a wrapper
+// newFluxorContext creates a FluxorContext for the ReactorRuntime.
+// This is a local implementation since core.newFluxorContext is not exported.
+//
+// Parameters:
+//   - goCtx: the Go context.Context (not FluxorContext)
+//   - vertx: the Vertx instance
+func newFluxorContext(goCtx context.Context, vertx core.Vertx) core.FluxorContext {
 	return &fluxorContextWrapper{
-		ctx:    ctx,
+		goCtx:  goCtx,
 		vertx:  vertx,
 		config: make(map[string]interface{}),
 	}
 }
 
-// fluxorContextWrapper wraps the context creation
+// fluxorContextWrapper implements core.FluxorContext for ReactorRuntime
 type fluxorContextWrapper struct {
-	ctx    context.Context
+	goCtx  context.Context // renamed from 'ctx' for clarity: this is Go's context.Context
 	vertx  core.Vertx
 	config map[string]interface{}
 }
 
-func (c *fluxorContextWrapper) Context() context.Context                { return c.ctx }
+func (c *fluxorContextWrapper) Context() context.Context                { return c.goCtx }
 func (c *fluxorContextWrapper) EventBus() core.EventBus                 { return c.vertx.EventBus() }
 func (c *fluxorContextWrapper) Vertx() core.Vertx                       { return c.vertx }
 func (c *fluxorContextWrapper) Config() map[string]interface{}          { return c.config }

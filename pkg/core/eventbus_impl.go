@@ -11,12 +11,24 @@ import (
 )
 
 // eventBus implements EventBus
+//
+// Ownership and circular reference:
+//   - eventBus is OWNED BY Vertx (created in NewVertx, closed in Vertx.Close)
+//   - eventBus REFERENCES Vertx (to create FluxorContext for message handlers)
+//   - This circular reference (vertx → eventBus → vertx) is intentional
+//   - Both are cleaned up together in Vertx.Close(), no memory leak
+//
+// Thread-safety:
+//   - mu protects the consumers map
+//   - Individual consumer has its own mutex for handler field
+//   - Publish/Send/Request use RLock (concurrent reads)
+//   - Consumer registration uses Lock (exclusive writes)
 type eventBus struct {
 	consumers map[string][]*consumer
 	mu        sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	vertx     Vertx                // Store Vertx reference for creating FluxorContext
+	ctx       context.Context      // derived from vertx.rootCtx via WithCancel
+	cancel    context.CancelFunc   // cancels ctx; called in Close() (redundant but defense-in-depth)
+	vertx     Vertx                // back-reference to Vertx for creating FluxorContext (circular ref)
 	executor  concurrency.Executor // Executor for processing messages (hides goroutines)
 	logger    Logger               // Logger for error and debug messages
 }
@@ -229,11 +241,11 @@ func (eb *eventBus) Consumer(address string) Consumer {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 
-	// Initialize ctx when creating consumer
+	// Initialize fluxorCtx when creating consumer
 	// Create FluxorContext for the consumer using eventBus's Vertx reference
 	var fluxorCtx FluxorContext
 	if eb.vertx != nil {
-		fluxorCtx = newContext(eb.ctx, eb.vertx)
+		fluxorCtx = newFluxorContext(eb.ctx, eb.vertx)
 	}
 
 	c := &consumer{
@@ -342,10 +354,10 @@ func (c *consumer) processMessages(ctx context.Context) error {
 			// Use the consumer's context (now properly initialized)
 			fluxorCtx := c.ctx
 			if fluxorCtx == nil {
-				// Fallback: create context if somehow nil (shouldn't happen after Bug 1 fix)
-				if c.eventBus.vertx != nil {
-					fluxorCtx = newContext(c.eventBus.ctx, c.eventBus.vertx)
-				}
+			// Fallback: create context if somehow nil (shouldn't happen after fix)
+			if c.eventBus.vertx != nil {
+				fluxorCtx = newFluxorContext(c.eventBus.ctx, c.eventBus.vertx)
+			}
 			}
 
 			// Wrap handler call in panic recovery for individual messages (panic isolation)
