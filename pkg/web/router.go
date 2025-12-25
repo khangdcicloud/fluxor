@@ -76,10 +76,11 @@ func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-		for _, route := range r.routes {
+	for _, route := range r.routes {
 		if route.method == req.Method && r.matchPath(route.path, req.URL.Path) {
 			ctx := &RequestContext{
 				BaseRequestContext: core.NewBaseRequestContext(),
+				Context:            req.Context(),
 				Request:            req,
 				Response:           w,
 				Params:             r.extractParams(route.path, req.URL.Path),

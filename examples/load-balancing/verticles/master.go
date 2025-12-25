@@ -1,13 +1,15 @@
 package verticles
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
-	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/fluxorio/fluxor/examples/load-balancing/contracts"
 	"github.com/fluxorio/fluxor/pkg/core"
+	"github.com/fluxorio/fluxor/pkg/tcp"
 	"github.com/fluxorio/fluxor/pkg/web"
 )
 
@@ -18,9 +20,11 @@ type MasterVerticle struct {
 	workerIDs []string
 	counter   uint64
 	
-	httpServer *web.FastHTTPServer
-	tcpListener net.Listener
-	logger      core.Logger
+	httpPort     string
+	tcpAddr      string
+	httpVerticle *web.HttpVerticle
+	tcpServer    *tcp.TCPServer
+	logger       core.Logger
 }
 
 func NewMasterVerticle(workerIDs []string) *MasterVerticle {
@@ -34,114 +38,145 @@ func NewMasterVerticle(workerIDs []string) *MasterVerticle {
 func (v *MasterVerticle) doStart(ctx core.FluxorContext) error {
 	v.logger.Info("Master starting...")
 
-	// 1. Start HTTP Server
-	v.startHTTPServer(ctx)
+	// Config (optional)
+	cfg := ctx.Config()
+	if p, ok := cfg["http_port"].(string); ok && p != "" {
+		v.httpPort = p
+	}
+	if v.httpPort == "" {
+		v.httpPort = "8080"
+	}
+	if a, ok := cfg["tcp_addr"].(string); ok && a != "" {
+		v.tcpAddr = a
+	}
+	if v.tcpAddr == "" {
+		v.tcpAddr = ":9090"
+	}
 
-	// 2. Start TCP Server
-	go v.startTCPServer(ctx)
+	// 1. Start HTTP gateway (HttpVerticle)
+	if err := v.startHTTPVerticle(ctx); err != nil {
+		return err
+	}
+
+	// 2. Start TCP gateway (pkg/tcp server)
+	v.startTCPServer(ctx)
 
 	return nil
 }
 
 func (v *MasterVerticle) doStop(ctx core.FluxorContext) error {
-	if v.httpServer != nil {
-		_ = v.httpServer.Stop()
+	if v.httpVerticle != nil {
+		_ = v.httpVerticle.Stop(ctx)
 	}
-	if v.tcpListener != nil {
-		_ = v.tcpListener.Close()
+	if v.tcpServer != nil {
+		_ = v.tcpServer.Stop()
 	}
 	return nil
 }
 
-func (v *MasterVerticle) startHTTPServer(ctx core.FluxorContext) {
-	cfg := web.DefaultFastHTTPServerConfig(":8080")
-	v.httpServer = web.NewFastHTTPServer(ctx.Vertx(), cfg)
-	
-	r := v.httpServer.FastRouter()
-	r.GETFast("/process", func(c *web.FastRequestContext) error {
-		payload := c.Query("data")
+func (v *MasterVerticle) startHTTPVerticle(ctx core.FluxorContext) error {
+	r := web.NewRouter()
+
+	r.GET("/process", func(c *web.RequestContext) error {
+		payload := ""
+		if c.Request != nil {
+			payload = c.Request.URL.Query().Get("data")
+		}
 		if payload == "" {
 			payload = "default-data"
 		}
 
-		// Load Balance
 		workerAddr := v.nextWorkerAddress()
-		
 		req := contracts.WorkRequest{
 			ID:      fmt.Sprintf("http-%d", time.Now().UnixNano()),
 			Payload: payload,
 		}
 
-		// Call Worker
-		reply, err := c.EventBus.Request(workerAddr, req, 5*time.Second)
+		reply, err := v.EventBus().Request(workerAddr, req, 5*time.Second)
 		if err != nil {
-			return c.JSON(500, map[string]string{"error": err.Error()})
+			return c.JSON(502, map[string]any{"error": err.Error()})
 		}
 
 		var resp contracts.WorkResponse
 		_ = reply.DecodeBody(&resp)
-		
 		return c.JSON(200, resp)
 	})
 
-	go func() {
-		if err := v.httpServer.Start(); err != nil {
-			v.logger.Errorf("HTTP Server failed: %v", err)
+	r.GET("/status", func(c *web.RequestContext) error {
+		type status struct {
+			Role     string           `json:"role"`
+			Workers  []string         `json:"workers"`
+			TCPAddr  string           `json:"tcp_addr"`
+			HTTPPort string           `json:"http_port"`
+			Metrics  tcp.ServerMetrics `json:"tcp_metrics"`
 		}
-	}()
-	v.logger.Info("HTTP Server listening on :8080")
+
+		m := tcp.ServerMetrics{}
+		if v.tcpServer != nil {
+			m = v.tcpServer.Metrics()
+		}
+		return c.JSON(200, status{
+			Role:     "master",
+			Workers:  v.workerIDs,
+			TCPAddr:  v.tcpAddr,
+			HTTPPort: v.httpPort,
+			Metrics:  m,
+		})
+	})
+
+	v.httpVerticle = web.NewHttpVerticle(v.httpPort, r)
+	v.logger.Infof("HTTP Server listening on :%s", v.httpPort)
+	return v.httpVerticle.Start(ctx)
 }
 
 func (v *MasterVerticle) startTCPServer(ctx core.FluxorContext) {
-	addr := ":9090"
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		v.logger.Errorf("TCP listen failed: %v", err)
-		return
-	}
-	v.tcpListener = l
-	v.logger.Infof("TCP Server listening on %s", addr)
+	cfg := tcp.DefaultTCPServerConfig(v.tcpAddr)
+	v.tcpServer = tcp.NewTCPServer(ctx.Vertx(), cfg)
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			return
+	v.tcpServer.SetHandler(func(c *tcp.ConnContext) error {
+		// Simple protocol: one line in, one line out.
+		rd := bufio.NewReader(c.Conn)
+		line, err := rd.ReadBytes('\n')
+		if err != nil && len(line) == 0 {
+			return err
 		}
-		go v.handleTCPConnection(ctx, conn)
-	}
-}
 
-func (v *MasterVerticle) handleTCPConnection(ctx core.FluxorContext, conn net.Conn) {
-	defer conn.Close()
-	
-	// Simple protocol: Read line -> Process -> Write line
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-	
-	payload := string(buf[:n])
-	
-	// Load Balance
-	workerAddr := v.nextWorkerAddress()
-	
-	req := contracts.WorkRequest{
-		ID:      fmt.Sprintf("tcp-%d", time.Now().UnixNano()),
-		Payload: payload,
-	}
+		// Trim common line endings/spaces.
+		payload := string(line)
+		for len(payload) > 0 && (payload[len(payload)-1] == '\n' || payload[len(payload)-1] == '\r') {
+			payload = payload[:len(payload)-1]
+		}
 
-	// Call Worker via EventBus
-	reply, err := v.EventBus().Request(workerAddr, req, 5*time.Second)
-	if err != nil {
-		conn.Write([]byte(fmt.Sprintf("Error: %v\n", err)))
-		return
-	}
+		workerAddr := v.nextWorkerAddress()
+		req := contracts.WorkRequest{
+			ID:      fmt.Sprintf("tcp-%d", time.Now().UnixNano()),
+			Payload: payload,
+		}
 
-	var resp contracts.WorkResponse
-	_ = reply.DecodeBody(&resp)
-	
-	conn.Write([]byte(fmt.Sprintf("Processed by %s: %s\n", resp.Worker, resp.Result)))
+		reply, reqErr := c.EventBus.Request(workerAddr, req, 5*time.Second)
+		if reqErr != nil {
+			_, _ = c.Conn.Write([]byte(fmt.Sprintf("Error: %v\n", reqErr)))
+			return nil
+		}
+
+		var resp contracts.WorkResponse
+		_ = reply.DecodeBody(&resp)
+		out := map[string]any{
+			"id":     resp.ID,
+			"result": resp.Result,
+			"worker": resp.Worker,
+		}
+		b, _ := json.Marshal(out)
+		_, _ = c.Conn.Write(append(b, '\n'))
+		return nil
+	})
+
+	go func() {
+		v.logger.Infof("TCP Server listening on %s", v.tcpAddr)
+		if err := v.tcpServer.Start(); err != nil {
+			v.logger.Errorf("TCP Server failed: %v", err)
+		}
+	}()
 }
 
 func (v *MasterVerticle) nextWorkerAddress() string {

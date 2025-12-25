@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/fluxorio/fluxor/pkg/core"
@@ -65,8 +66,12 @@ type RequestContext struct {
 func (c *RequestContext) JSON(statusCode int, data interface{}) error {
 	c.Response.Header().Set("Content-Type", "application/json")
 	c.Response.WriteHeader(statusCode)
-	// In production, use json.Marshal
-	_, err := c.Response.Write([]byte("{}"))
+	b, err := json.Marshal(data)
+	if err != nil {
+		http.Error(c.Response, "failed to encode json", http.StatusInternalServerError)
+		return err
+	}
+	_, err = c.Response.Write(b)
 	return err
 }
 
