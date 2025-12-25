@@ -1,0 +1,81 @@
+{
+  "id": "data-pipeline",
+  "name": "Data Processing Pipeline",
+  "description": "Fetch data, transform, and send notifications",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "manual",
+      "name": "Start",
+      "next": ["fetch-data"]
+    },
+    {
+      "id": "fetch-data",
+      "type": "http",
+      "name": "Fetch External Data",
+      "config": {
+        "url": "https://jsonplaceholder.typicode.com/posts/{{postId}}",
+        "method": "GET",
+        "timeout": "10s"
+      },
+      "next": ["check-response"],
+      "onError": ["error-handler"]
+    },
+    {
+      "id": "check-response",
+      "type": "condition",
+      "name": "Check Response",
+      "config": {
+        "field": "statusCode",
+        "operator": "eq",
+        "value": 200
+      },
+      "trueNext": ["transform"],
+      "falseNext": ["error-handler"]
+    },
+    {
+      "id": "transform",
+      "type": "set",
+      "name": "Transform Data",
+      "config": {
+        "values": {
+          "processed": true,
+          "source": "external-api"
+        }
+      },
+      "next": ["notify"]
+    },
+    {
+      "id": "notify",
+      "type": "eventbus",
+      "name": "Send Notification",
+      "config": {
+        "address": "notifications.send",
+        "action": "publish"
+      },
+      "next": ["complete"]
+    },
+    {
+      "id": "complete",
+      "type": "set",
+      "name": "Complete",
+      "config": {
+        "values": {
+          "status": "completed",
+          "message": "Pipeline executed successfully"
+        }
+      }
+    },
+    {
+      "id": "error-handler",
+      "type": "set",
+      "name": "Handle Error",
+      "config": {
+        "values": {
+          "status": "failed",
+          "error": "Pipeline execution failed"
+        }
+      }
+    }
+  ]
+}
