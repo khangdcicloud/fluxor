@@ -27,6 +27,10 @@ type Server interface {
 // The server closes the connection after handler returns.
 type ConnectionHandler func(ctx *ConnContext) error
 
+// Middleware is a TCP connection middleware, aligned with pkg/web.Middleware.
+// It wraps a ConnectionHandler with extra behavior (auth, metrics, tracing, etc.).
+type Middleware func(next ConnectionHandler) ConnectionHandler
+
 // ConnContext provides per-connection context and convenient access to Vertx/EventBus.
 // Mirrors web.RequestContext's shape (BaseRequestContext + Context + Vertx + EventBus).
 type ConnContext struct {
@@ -54,4 +58,6 @@ type ServerMetrics struct {
 	TotalAccepted       int64   // Total connections accepted
 	HandledConnections  int64   // Total connections handled
 	ErrorConnections    int64   // Total connections that returned error
+	ActiveConnections   int64   // Current in-flight connections (queued + handling)
+	MaxConns            int     // Configured max connections (0 = unlimited)
 }

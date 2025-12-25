@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -33,7 +34,11 @@ type TCPServer struct {
 	startWorkersOnce sync.Once
 
 	handler      ConnectionHandler
+	middlewares  []Middleware
+	effective    ConnectionHandler
 	backpressure *BackpressureController
+	maxConns     int
+	activeConns  int64 // atomic: in-flight (queued + processing)
 
 	// Metrics (atomic for thread-safety)
 	queuedConnections   int64
@@ -50,6 +55,12 @@ type TCPServerConfig struct {
 	// Backpressure: bounded queue + worker pool.
 	MaxQueue int
 	Workers  int
+	// MaxConns bounds concurrent in-flight connections (queued + handling).
+	// 0 means unlimited.
+	MaxConns int
+
+	// TLSConfig enables TLS when non-nil.
+	TLSConfig *tls.Config
 
 	// Connection settings.
 	ReadTimeout  time.Duration
@@ -65,6 +76,8 @@ func DefaultTCPServerConfig(addr string) *TCPServerConfig {
 		Addr:         addr,
 		MaxQueue:     1000,
 		Workers:      50,
+		MaxConns:     0,
+		TLSConfig:    nil,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
 	}
@@ -83,6 +96,9 @@ func NewTCPServer(vertx core.Vertx, config *TCPServerConfig) *TCPServer {
 	}
 	if config.Workers < 1 {
 		config.Workers = 1
+	}
+	if config.MaxConns < 0 {
+		config.MaxConns = 0
 	}
 	if config.ReadTimeout <= 0 {
 		config.ReadTimeout = 5 * time.Second
@@ -106,9 +122,11 @@ func NewTCPServer(vertx core.Vertx, config *TCPServerConfig) *TCPServer {
 		executor:     executor,
 		workers:      config.Workers,
 		maxQueue:     config.MaxQueue,
+		maxConns:     config.MaxConns,
 		backpressure: NewBackpressureController(normalCapacity, 60),
 		handler:      defaultConnectionHandler,
 	}
+	s.effective = s.handler
 
 	// Wire BaseServer hooks (template method pattern).
 	s.BaseServer.SetHooks(s.doStart, s.doStop)
@@ -132,6 +150,33 @@ func (s *TCPServer) SetHandler(handler ConnectionHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.handler = handler
+	s.rebuildHandlerLocked()
+}
+
+// Use adds middleware to the TCP server. Best practice: call before Start().
+// Fail-fast: panics if any middleware is nil.
+func (s *TCPServer) Use(mw ...Middleware) {
+	if len(mw) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range mw {
+		if m == nil {
+			panic("tcp middleware cannot be nil")
+		}
+		s.middlewares = append(s.middlewares, m)
+	}
+	s.rebuildHandlerLocked()
+}
+
+func (s *TCPServer) rebuildHandlerLocked() {
+	h := s.handler
+	// Wrap like web middleware: last added runs outermost.
+	for i := len(s.middlewares) - 1; i >= 0; i-- {
+		h = s.middlewares[i](h)
+	}
+	s.effective = h
 }
 
 // ListeningAddr returns the actual listening address (useful when Addr is ":0").
@@ -151,7 +196,15 @@ func (s *TCPServer) doStart() error {
 	// Ensure workers are running.
 	s.startConnWorkers()
 
-	ln, err := net.Listen("tcp", s.addr)
+	var (
+		ln  net.Listener
+		err error
+	)
+	if s.config.TLSConfig != nil {
+		ln, err = tls.Listen("tcp", s.addr, s.config.TLSConfig)
+	} else {
+		ln, err = net.Listen("tcp", s.addr)
+	}
 	if err != nil {
 		return err
 	}
@@ -176,6 +229,11 @@ func (s *TCPServer) doStart() error {
 		}
 
 		atomic.AddInt64(&s.totalAccepted, 1)
+		if !s.tryAcquireConnSlot() {
+			atomic.AddInt64(&s.rejectedConnections, 1)
+			_ = conn.Close()
+			continue
+		}
 		s.enqueueConn(conn)
 	}
 }
@@ -228,13 +286,37 @@ func (s *TCPServer) Metrics() ServerMetrics {
 		TotalAccepted:       atomic.LoadInt64(&s.totalAccepted),
 		HandledConnections:  atomic.LoadInt64(&s.handledConnections),
 		ErrorConnections:    atomic.LoadInt64(&s.errorConnections),
+		ActiveConnections:   atomic.LoadInt64(&s.activeConns),
+		MaxConns:            s.maxConns,
 	}
+}
+
+func (s *TCPServer) tryAcquireConnSlot() bool {
+	// Unlimited: track active for metrics only.
+	if s.maxConns <= 0 {
+		atomic.AddInt64(&s.activeConns, 1)
+		return true
+	}
+	for {
+		cur := atomic.LoadInt64(&s.activeConns)
+		if int(cur) >= s.maxConns {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(&s.activeConns, cur, cur+1) {
+			return true
+		}
+	}
+}
+
+func (s *TCPServer) releaseConnSlot() {
+	atomic.AddInt64(&s.activeConns, -1)
 }
 
 func (s *TCPServer) enqueueConn(conn net.Conn) {
 	// Backpressure baseline: reject immediately when normal capacity exceeded.
 	if !s.backpressure.TryAcquire() {
 		atomic.AddInt64(&s.rejectedConnections, 1)
+		s.releaseConnSlot()
 		_ = conn.Close()
 		return
 	}
@@ -243,6 +325,7 @@ func (s *TCPServer) enqueueConn(conn net.Conn) {
 	if err := s.connMailbox.Send(conn); err != nil {
 		s.backpressure.Release()
 		atomic.AddInt64(&s.rejectedConnections, 1)
+		s.releaseConnSlot()
 		_ = conn.Close()
 		return
 	}
@@ -277,13 +360,14 @@ func (s *TCPServer) processConnFromMailbox(ctx context.Context) error {
 		if !ok || conn == nil {
 			// Fail-fast: unexpected mailbox payload.
 			s.backpressure.Release()
+			s.releaseConnSlot()
 			continue
 		}
 
 		atomic.AddInt64(&s.queuedConnections, -1)
 
 		s.mu.RLock()
-		h := s.handler
+		h := s.effective
 		s.mu.RUnlock()
 
 		// Per-connection timeouts (best-effort).
@@ -318,5 +402,6 @@ func (s *TCPServer) processConnFromMailbox(ctx context.Context) error {
 
 		_ = conn.Close()
 		s.backpressure.Release()
+		s.releaseConnSlot()
 	}
 }

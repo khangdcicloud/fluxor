@@ -12,7 +12,7 @@ Applies to:
 
 Non-goals:
 - Protocol framing (length-prefix, line protocol, etc.)
-- TLS (`crypto/tls`) integration (future work)
+- Protocol-level request/reply semantics (that’s up to the handler)
 
 ## Public API Shape
 
@@ -21,6 +21,8 @@ Non-goals:
 - **Handler**: `SetHandler(ConnectionHandler)`
 - **Metrics**: `Metrics() ServerMetrics`
 - **Listening address**: `(*TCPServer).ListeningAddr() string` (helper for `Addr=":0"`)
+- **TLS (optional)**: enable by setting `TCPServerConfig.TLSConfig`
+- **MaxConns (optional)**: fail-fast reject when `TCPServerConfig.MaxConns` is exceeded
 
 ## Lifecycle Semantics
 
@@ -60,6 +62,9 @@ Backpressure is applied in two layers, both **fail-fast**:
 2. **Bounded queue**:
    - If the mailbox is full, the connection is rejected immediately.
 
+3. **Max connections (optional)**:
+   - If `MaxConns > 0`, the server rejects new connections once in-flight (queued + handling) reaches `MaxConns`.
+
 ### Rejection behavior
 
 When rejecting a connection due to backpressure:
@@ -76,6 +81,7 @@ type ConnectionHandler func(ctx *tcp.ConnContext) error
 
 Rules:
 - **Fail-fast on nil**: calling `SetHandler(nil)` panics.
+- **Middleware support**: `(*TCPServer).Use(mw...)` wraps the handler (similar to `pkg/web` middleware).
 - **Panic isolation**: panics are recovered **per-connection**; one handler panic must not crash the process or kill the worker.
 - **One-shot handling**:
   - The server closes `ctx.Conn` after the handler returns (even on error).
@@ -117,7 +123,6 @@ Counters are **monotonic** (only increase), except instantaneous fields like que
 
 ## Known Limitations / Future Work
 
-- No TLS support in `pkg/tcp` yet.
 - No protocol framing helpers (length-prefix, line-based, etc.).
 - No first-class integration with `pkg/web` middleware concepts (auth/rate-limit) yet; expected to be added as reusable handler wrappers.
 

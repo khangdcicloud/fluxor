@@ -2,6 +2,12 @@ package tcp
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -9,6 +15,37 @@ import (
 
 	"github.com/fluxorio/fluxor/pkg/core"
 )
+
+func newTestTLSConfig(t *testing.T) *tls.Config {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	tpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(10 * time.Minute),
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+
+	cert := tls.Certificate{
+		Certificate: [][]byte{der},
+		PrivateKey:  key,
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+}
 
 func TestNewTCPServer_FailFast_NilVertxPanics(t *testing.T) {
 	t.Parallel()
@@ -246,6 +283,170 @@ func TestTCPServer_FailFast_PanicIsolation(t *testing.T) {
 	if atomic.LoadInt64(&calls) < 2 {
 		_ = s.Stop()
 		t.Fatalf("expected second call after panic, got %d", atomic.LoadInt64(&calls))
+	}
+
+	if err := s.Stop(); err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+
+	select {
+	case err := <-startErrCh:
+		if err != nil {
+			t.Fatalf("start returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("start did not exit after stop")
+	}
+}
+
+func TestTCPServer_MaxConns_FailFastRejects(t *testing.T) {
+	vertx := core.NewVertx(context.Background())
+	cfg := DefaultTCPServerConfig("127.0.0.1:0")
+	cfg.Workers = 1
+	cfg.MaxQueue = 10
+	cfg.MaxConns = 1
+	cfg.ReadTimeout = 2 * time.Second
+	cfg.WriteTimeout = 2 * time.Second
+
+	s := NewTCPServer(vertx, cfg)
+
+	block := make(chan struct{})
+	s.SetHandler(func(ctx *ConnContext) error {
+		<-block
+		return nil
+	})
+
+	startErrCh := make(chan error, 1)
+	go func() { startErrCh <- s.Start() }()
+
+	var addr string
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		addr = s.ListeningAddr()
+		if addr != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if addr == "" {
+		close(block)
+		_ = s.Stop()
+		t.Fatalf("server did not start listening in time")
+	}
+
+	// First connection reserves the only slot.
+	c1, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+	if err != nil {
+		close(block)
+		_ = s.Stop()
+		t.Fatalf("dial1 failed: %v", err)
+	}
+	t.Cleanup(func() { _ = c1.Close() })
+
+	// Wait until server reports active=1.
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.Metrics().ActiveConnections >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if s.Metrics().ActiveConnections < 1 {
+		close(block)
+		_ = s.Stop()
+		t.Fatalf("expected active connections to reach 1")
+	}
+
+	// Additional connections should be rejected.
+	for i := 0; i < 20; i++ {
+		c, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+		}
+	}
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.Metrics().RejectedConnections > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if s.Metrics().RejectedConnections == 0 {
+		close(block)
+		_ = s.Stop()
+		t.Fatalf("expected rejected connections due to MaxConns")
+	}
+
+	close(block)
+	if err := s.Stop(); err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+
+	select {
+	case err := <-startErrCh:
+		if err != nil {
+			t.Fatalf("start returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("start did not exit after stop")
+	}
+}
+
+func TestTCPServer_TLS_Works(t *testing.T) {
+	vertx := core.NewVertx(context.Background())
+	cfg := DefaultTCPServerConfig("127.0.0.1:0")
+	cfg.Workers = 1
+	cfg.MaxQueue = 10
+	cfg.ReadTimeout = 250 * time.Millisecond
+	cfg.WriteTimeout = 250 * time.Millisecond
+	cfg.TLSConfig = newTestTLSConfig(t)
+
+	s := NewTCPServer(vertx, cfg)
+
+	var handled int64
+	s.SetHandler(func(ctx *ConnContext) error {
+		buf := make([]byte, 1)
+		_, _ = ctx.Conn.Read(buf)
+		atomic.AddInt64(&handled, 1)
+		return nil
+	})
+
+	startErrCh := make(chan error, 1)
+	go func() { startErrCh <- s.Start() }()
+
+	var addr string
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		addr = s.ListeningAddr()
+		if addr != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if addr == "" {
+		_ = s.Stop()
+		t.Fatalf("server did not start listening in time")
+	}
+
+	c, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		_ = s.Stop()
+		t.Fatalf("tls dial failed: %v", err)
+	}
+	_, _ = c.Write([]byte{0x01})
+	_ = c.Close()
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt64(&handled) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt64(&handled) == 0 {
+		_ = s.Stop()
+		t.Fatalf("expected handler to be called over TLS")
 	}
 
 	if err := s.Stop(); err != nil {
