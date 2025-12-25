@@ -47,6 +47,7 @@ Fluxor provides:
 
 - **Event-driven architecture** with EventBus (pub/sub, point-to-point, request-reply)
 - **Verticle-based deployment** model for isolated units of work
+- **n8n-like Workflow Engine** - JSON-defined, event-driven workflows
 - **Reactive workflows** with composable steps
 - **Future/Promise** abstractions for async operations
 - **High-performance HTTP** server (FastHTTP with CCU-based backpressure)
@@ -163,6 +164,72 @@ step2 := fluxor.NewStep("step2", func(ctx context.Context, data interface{}) (in
 workflow := fluxor.NewWorkflow("my-workflow", step1, step2)
 workflow.Execute(ctx)
 ```
+
+### Workflow Engine (n8n-like)
+
+Build complex automation workflows using JSON definitions and EventBus:
+
+```go
+import "github.com/fluxorio/fluxor/pkg/workflow"
+
+// Create workflow verticle
+wfVerticle := workflow.NewWorkflowVerticle(&workflow.WorkflowVerticleConfig{
+    HTTPAddr: ":8081", // Optional HTTP API
+})
+
+// Register custom functions
+wfVerticle.RegisterFunction("processOrder", func(data interface{}) (interface{}, error) {
+    order := data.(map[string]interface{})
+    order["processed"] = true
+    return order, nil
+})
+
+app.DeployVerticle(wfVerticle)
+```
+
+**Workflow JSON Definition:**
+
+```json
+{
+  "id": "order-processing",
+  "name": "Order Processing",
+  "nodes": [
+    {"id": "start", "type": "manual", "next": ["validate"]},
+    {"id": "validate", "type": "condition",
+     "config": {"field": "amount", "operator": "gt", "value": 0},
+     "trueNext": ["process"], "falseNext": ["reject"]},
+    {"id": "process", "type": "function",
+     "config": {"function": "processOrder"},
+     "next": ["notify"]},
+    {"id": "notify", "type": "http",
+     "config": {"url": "https://api.example.com/notify", "method": "POST"}}
+  ]
+}
+```
+
+**Built-in Node Types:**
+
+| Category | Types |
+|----------|-------|
+| **Triggers** | `manual`, `webhook`, `schedule`, `event` |
+| **Actions** | `function`, `http`, `eventbus`, `set`, `code` |
+| **Flow Control** | `condition`, `switch`, `split`, `merge`, `loop`, `wait` |
+| **Utility** | `filter`, `map`, `reduce`, `noop`, `error` |
+
+**Programmatic Builder:**
+
+```go
+wf := workflow.NewWorkflowBuilder("my-workflow", "My Workflow").
+    AddNode("start", "manual").Next("process").Done().
+    AddNode("process", "function").
+        Config(map[string]interface{}{"function": "myFunc"}).
+        Retry(3).Timeout(30*time.Second).Done().
+    Build()
+
+wfVerticle.Engine().RegisterWorkflow(wf)
+```
+
+See [pkg/workflow/README.md](pkg/workflow/README.md) for complete documentation.
 
 ### Futures and Promises
 
@@ -371,6 +438,7 @@ For complex applications needing advanced DI, see [ARCHITECTURE.md](ARCHITECTURE
 ### Core Features
 - ✅ Event-driven messaging (pub/sub, point-to-point, request-reply)
 - ✅ Verticle deployment model
+- ✅ **n8n-like Workflow Engine** - JSON-defined, event-driven automation
 - ✅ Reactive workflows
 - ✅ Future/Promise abstractions
 - ✅ Stack-based task execution
@@ -484,6 +552,8 @@ See [`cmd/enterprise/README.md`](cmd/enterprise/README.md) for complete document
 ### Core Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design patterns
+- **[docs/PRIMARY_PATTERN.md](docs/PRIMARY_PATTERN.md)** - Recommended MainVerticle pattern
+- **[pkg/workflow/README.md](pkg/workflow/README.md)** - n8n-like Workflow Engine guide
 - **[DOCUMENTATION.md](DOCUMENTATION.md)** - Complete API reference and usage guide
 - **[CORE_COMPONENTS.md](CORE_COMPONENTS.md)** - Core components definition and interactions
 - **[COMPONENT_FLOW.md](COMPONENT_FLOW.md)** - Component flow reference and data flow diagrams
