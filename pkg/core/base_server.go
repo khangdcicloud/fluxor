@@ -62,6 +62,9 @@ func (bs *BaseServer) Start() error {
 		return &Error{Code: "ALREADY_STARTED", Message: "server already started"}
 	}
 	startHook := bs.startHook
+	// Mark started before invoking start hook so IsStarted() reflects runtime state
+	// even when the start hook blocks (common for servers).
+	bs.started = true
 	bs.mu.Unlock()
 
 	// Call hook method for subclass customization
@@ -69,12 +72,12 @@ func (bs *BaseServer) Start() error {
 		startHook = bs.doStart
 	}
 	if err := startHook(); err != nil {
+		// Roll back started state on error.
+		bs.mu.Lock()
+		bs.started = false
+		bs.mu.Unlock()
 		return err
 	}
-
-	bs.mu.Lock()
-	bs.started = true
-	bs.mu.Unlock()
 	return nil
 }
 
