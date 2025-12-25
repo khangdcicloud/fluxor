@@ -21,6 +21,12 @@ type BaseServer struct {
 
 	// Logger for server operations
 	logger Logger
+
+	// Hook functions for template method pattern.
+	// In Go, embedded-method "overrides" are not dispatched dynamically when the
+	// embedded type calls its own methods, so we store explicit hooks instead.
+	startHook func() error
+	stopHook  func() error
 }
 
 // NewBaseServer creates a new BaseServer
@@ -36,22 +42,42 @@ func NewBaseServer(name string, vertx Vertx) *BaseServer {
 	}
 }
 
+// SetHooks configures hook functions for Start/Stop.
+// Call this from the concrete server after construction:
+//
+//	s.BaseServer.SetHooks(s.doStart, s.doStop)
+func (bs *BaseServer) SetHooks(startHook func() error, stopHook func() error) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.startHook = startHook
+	bs.stopHook = stopHook
+}
+
 // Start implements Server.Start with template method pattern
 // Subclasses should override doStart() for custom initialization
 func (bs *BaseServer) Start() error {
 	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
 	if bs.started {
+		bs.mu.Unlock()
 		return &Error{Code: "ALREADY_STARTED", Message: "server already started"}
 	}
+	startHook := bs.startHook
+	// Mark started before invoking start hook so IsStarted() reflects runtime state
+	// even when the start hook blocks (common for servers).
+	bs.started = true
+	bs.mu.Unlock()
 
 	// Call hook method for subclass customization
-	if err := bs.doStart(); err != nil {
+	if startHook == nil {
+		startHook = bs.doStart
+	}
+	if err := startHook(); err != nil {
+		// Roll back started state on error.
+		bs.mu.Lock()
+		bs.started = false
+		bs.mu.Unlock()
 		return err
 	}
-
-	bs.started = true
 	return nil
 }
 
@@ -59,18 +85,24 @@ func (bs *BaseServer) Start() error {
 // Subclasses should override doStop() for custom cleanup
 func (bs *BaseServer) Stop() error {
 	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
 	if bs.stopped {
+		bs.mu.Unlock()
 		return nil // Already stopped
 	}
+	stopHook := bs.stopHook
+	bs.mu.Unlock()
 
 	// Call hook method for subclass customization
-	if err := bs.doStop(); err != nil {
+	if stopHook == nil {
+		stopHook = bs.doStop
+	}
+	if err := stopHook(); err != nil {
 		return err
 	}
 
+	bs.mu.Lock()
 	bs.stopped = true
+	bs.mu.Unlock()
 	return nil
 }
 

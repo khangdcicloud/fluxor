@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +32,8 @@ type FastHTTPServer struct {
 	errorRequests      int64 // Atomic counter for error requests (500-599)
 	// Backpressure controller for CCU-based limiting
 	backpressure *BackpressureController
+	// Start workers once (constructor and Start() might both call it).
+	startWorkersOnce sync.Once
 }
 
 // FastHTTPServerConfig configures the fasthttp server
@@ -188,6 +191,9 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 		},
 	}
 
+	// Wire BaseServer hooks (template method pattern).
+	s.BaseServer.SetHooks(s.doStart, s.doStop)
+
 	// Set handler after server is created
 	s.server.Handler = s.handleRequest
 
@@ -322,31 +328,33 @@ func (s *FastHTTPServer) SetHandler(handler func(*fasthttp.RequestCtx)) {
 
 // startRequestWorkers starts request processing using Executor (hides goroutine creation)
 func (s *FastHTTPServer) startRequestWorkers() {
-	// Submit worker tasks to executor (hides go func() calls)
-	for i := 0; i < s.workers; i++ {
-		task := concurrency.NewNamedTask(
-			fmt.Sprintf("http-worker-%d", i),
-			func(ctx context.Context) error {
-				return s.processRequestFromMailbox(ctx)
-			},
-		)
-		if err := s.executor.Submit(task); err != nil {
-			// Log error but continue
-			s.Logger().Errorf("failed to start worker %d: %v", i, err)
+	s.startWorkersOnce.Do(func() {
+		// Submit worker tasks to executor (hides go func() calls)
+		for i := 0; i < s.workers; i++ {
+			task := concurrency.NewNamedTask(
+				fmt.Sprintf("http-worker-%d", i),
+				func(ctx context.Context) error {
+					return s.processRequestFromMailbox(ctx)
+				},
+			)
+			if err := s.executor.Submit(task); err != nil {
+				// Log error but continue
+				s.Logger().Errorf("failed to start worker %d: %v", i, err)
+			}
 		}
-	}
+	})
 }
 
 // processRequestFromMailbox processes requests from mailbox (hides channel operations)
 func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 	// Fail-fast: recover from panics to prevent system crash
 	// Panic isolation: one worker panic doesn't crash entire system
-		defer func() {
-			if r := recover(); r != nil {
-				// Log panic but don't re-panic to prevent system crash
-				s.Logger().Errorf("panic in worker (isolated): %v", r)
-			}
-		}()
+	defer func() {
+		if r := recover(); r != nil {
+			// Log panic but don't re-panic to prevent system crash
+			s.Logger().Errorf("panic in worker (isolated): %v", r)
+		}
+	}()
 
 	// Use Mailbox abstraction (hides channel receive and select statement)
 	for {

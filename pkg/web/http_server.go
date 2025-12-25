@@ -20,7 +20,7 @@ type httpServer struct {
 func NewServer(vertx core.Vertx, addr string) Server {
 	r := NewRouter().(*router)
 
-	return &httpServer{
+	s := &httpServer{
 		BaseServer: core.NewBaseServer("http-server", vertx),
 		router:     r,
 		httpServer: &http.Server{
@@ -29,6 +29,8 @@ func NewServer(vertx core.Vertx, addr string) Server {
 			ReadHeaderTimeout: 5 * time.Second, // mitigate Slowloris
 		},
 	}
+	s.BaseServer.SetHooks(s.doStart, s.doStop)
+	return s
 }
 
 // doStart is called by BaseServer.Start() - implements hook method
