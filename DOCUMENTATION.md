@@ -745,6 +745,7 @@ router.GETFast("/api/data", func(ctx *web.FastRequestContext) error {
 
 - `docs/clarity/06-interface-first-and-contracts.md` — how we do interface-first + contract specs (code is truth)
 - `docs/clarity/05-tcp-contract.md` — concrete example: TCP server contract
+- `docs/clarity/07-append-only-data-and-rotation.md` — append-only data rule + in-memory-first + rotate-to-disk persistence
 
 ---
 
