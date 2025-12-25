@@ -315,6 +315,11 @@ func (eb *clusterJSEventBus) Request(address string, body interface{}, timeout t
 }
 
 func (eb *clusterJSEventBus) Consumer(address string) Consumer {
+	// Fail-fast: keep contract consistent with in-memory EventBus.
+	// Invalid address is a programmer error and should be caught in dev.
+	if err := ValidateAddress(address); err != nil {
+		FailFast(err)
+	}
 	return newClusterJSConsumer(address, eb)
 }
 

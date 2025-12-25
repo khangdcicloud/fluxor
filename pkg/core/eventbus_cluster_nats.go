@@ -199,6 +199,11 @@ func (eb *clusterNATSEventBus) Request(address string, body interface{}, timeout
 }
 
 func (eb *clusterNATSEventBus) Consumer(address string) Consumer {
+	// Fail-fast: keep contract consistent with in-memory EventBus.
+	// Invalid address is a programmer error and should be caught in dev.
+	if err := ValidateAddress(address); err != nil {
+		FailFast(err)
+	}
 	// Create consumer object. Handler() will create subscriptions.
 	return newClusterNATSConsumer(address, eb)
 }

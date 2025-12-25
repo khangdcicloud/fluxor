@@ -76,7 +76,7 @@ type ConnectionHandler func(ctx *tcp.ConnContext) error
 
 Rules:
 - **Fail-fast on nil**: calling `SetHandler(nil)` panics.
-- **Panic isolation**: worker goroutines recover panics; a panic must not crash the process.
+- **Panic isolation**: panics are recovered **per-connection**; one handler panic must not crash the process or kill the worker.
 - **One-shot handling**:
   - The server closes `ctx.Conn` after the handler returns (even on error).
   - Handlers should treat the connection as owned only for the duration of the call.
