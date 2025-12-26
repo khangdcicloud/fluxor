@@ -186,7 +186,7 @@ func (f *future) Map(fn func(interface{}) interface{}) Future {
 // Await waits for the future to complete and returns the result
 // Provides async/await-style syntax: result, err := future.Await(ctx)
 func (f *future) Await(ctx context.Context) (interface{}, error) {
-	// Check if already completed
+	// Always check completed state first (handles multiple Await calls)
 	f.mu.RLock()
 	if f.completed {
 		result := f.result
@@ -198,15 +198,36 @@ func (f *future) Await(ctx context.Context) (interface{}, error) {
 	}
 	f.mu.RUnlock()
 
-	// Wait for completion or context cancellation
-	select {
-	case result := <-f.resultChan:
-		if result.Error != nil {
-			return nil, result.Error
+	// Wait with periodic recheck (handles race condition where result was consumed)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case result := <-f.resultChan:
+			// Put it back for other Await calls
+			select {
+			case f.resultChan <- result:
+			default:
+			}
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			return result.Value, nil
+		case <-ticker.C:
+			f.mu.RLock()
+			if f.completed {
+				result := f.result
+				f.mu.RUnlock()
+				if result.Error != nil {
+					return nil, result.Error
+				}
+				return result.Value, nil
+			}
+			f.mu.RUnlock()
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-		return result.Value, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 }
 
@@ -265,13 +286,49 @@ func NewPromise() Promise {
 }
 
 func (p *promise) TryComplete(result interface{}) bool {
-	p.Complete(result)
-	return true
+	// Track if this call actually completed the promise
+	completed := false
+	p.Future.(*future).once.Do(func() {
+		completed = true
+		p.Future.(*future).mu.Lock()
+		p.Future.(*future).completed = true
+		p.Future.(*future).result = FutureResult{Value: result}
+		p.Future.(*future).mu.Unlock()
+
+		select {
+		case p.Future.(*future).resultChan <- p.Future.(*future).result:
+		default:
+		}
+
+		// Call success handlers
+		for _, handler := range p.Future.(*future).successHandlers {
+			handler(result)
+		}
+	})
+	return completed
 }
 
 func (p *promise) TryFail(err error) bool {
-	p.Fail(err)
-	return true
+	// Track if this call actually completed the promise
+	completed := false
+	p.Future.(*future).once.Do(func() {
+		completed = true
+		p.Future.(*future).mu.Lock()
+		p.Future.(*future).completed = true
+		p.Future.(*future).result = FutureResult{Error: err}
+		p.Future.(*future).mu.Unlock()
+
+		select {
+		case p.Future.(*future).resultChan <- p.Future.(*future).result:
+		default:
+		}
+
+		// Call failure handlers
+		for _, handler := range p.Future.(*future).failureHandlers {
+			handler(err)
+		}
+	})
+	return completed
 }
 
 // ReactiveVerticle is a verticle that uses reactive patterns

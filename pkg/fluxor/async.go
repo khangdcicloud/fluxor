@@ -2,6 +2,7 @@ package fluxor
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/fluxorio/fluxor/pkg/core"
@@ -279,14 +280,34 @@ func All[T any](ctx context.Context, futures ...interface {
 	promise := NewPromiseT[[]T]()
 
 	go func() {
-		results := make([]T, 0, len(futures))
-		for _, f := range futures {
-			result, err := f.Await(ctx)
+		results := make([]T, len(futures))
+		errors := make([]error, len(futures))
+		var wg sync.WaitGroup
+
+		// Wait for all concurrently
+		for i, f := range futures {
+			wg.Add(1)
+			go func(idx int, future interface {
+				Await(context.Context) (T, error)
+			}) {
+				defer wg.Done()
+				result, err := future.Await(ctx)
+				if err != nil {
+					errors[idx] = err
+				} else {
+					results[idx] = result
+				}
+			}(i, f)
+		}
+
+		wg.Wait()
+
+		// Check for any errors
+		for _, err := range errors {
 			if err != nil {
 				promise.Fail(err)
 				return
 			}
-			results = append(results, result)
 		}
 		promise.Complete(results)
 	}()
