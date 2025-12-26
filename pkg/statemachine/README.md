@@ -22,9 +22,10 @@ A powerful, event-driven state machine implementation for the Fluxor framework, 
 3. [Building State Machines](#building-state-machines)
 4. [Deploying State Machines](#deploying-state-machines)
 5. [Working with Events](#working-with-events)
-6. [Advanced Features](#advanced-features)
-7. [Examples](#examples)
-8. [API Reference](#api-reference)
+6. [Store Pattern (Redux/Vuex Style)](#store-pattern-reduxvuex-style)
+7. [Advanced Features](#advanced-features)
+8. [Examples](#examples)
+9. [API Reference](#api-reference)
 
 ## Quick Start
 
@@ -355,6 +356,87 @@ eventBus.Consumer("statemachine.order-fsm.transition.completed").
         return nil
     })
 ```
+
+## Store Pattern (Redux/Vuex Style)
+
+In addition to the event-driven state machine, Fluxor provides a **Store** implementation with Redux/Vuex-style patterns:
+
+### Quick Example
+
+```go
+// Create store with mutations, actions, and getters
+store := statemachine.NewStoreBuilder().
+    WithState(&statemachine.StateContext{
+        Data: map[string]interface{}{"count": 0},
+    }).
+    // Mutation: synchronous state change (commit)
+    WithMutation("increment", func(state *statemachine.StateContext, payload interface{}) error {
+        count := state.Data["count"].(int)
+        state.Data["count"] = count + 1
+        return nil
+    }).
+    // Action: asynchronous operation (dispatch)
+    WithAction("incrementAsync", func(ctx *statemachine.ActionContext, payload interface{}) error {
+        time.Sleep(100 * time.Millisecond) // Simulate async
+        return ctx.Commit("increment", nil)
+    }).
+    // Getter: computed value
+    WithGetter("doubleCount", func(state *statemachine.StateContext) interface{} {
+        count := state.Data["count"].(int)
+        return count * 2
+    }).
+    // on_error handler
+    WithErrorHandler(func(action string, err error, payload interface{}) {
+        log.Printf("Action %s failed: %v", action, err)
+    }).
+    Build()
+
+// Commit mutation (sync)
+store.Commit("increment", nil)
+
+// Dispatch action (async)
+store.Dispatch(ctx, "incrementAsync", nil)
+
+// Get computed value
+doubleCount, _ := store.Get("doubleCount")
+```
+
+### Store Concepts
+
+| Concept | Description | Method |
+|---------|-------------|--------|
+| **Store** | Centralized state container | `NewStore()` |
+| **Mutation** | Synchronous state change | `Commit(name, payload)` |
+| **Action** | Asynchronous operation | `Dispatch(ctx, name, payload)` |
+| **Getter** | Computed value | `Get(name)` |
+| **Plugin** | Lifecycle hook/middleware | `WithPlugin()` |
+| **on_error** | Error handler | `WithErrorHandler()` |
+
+### Built-in Plugins
+
+- **LoggerPlugin**: Logs all mutations
+- **PersistencePlugin**: Persists state after mutations
+- **EventBusPlugin**: Publishes mutations to EventBus
+- **HistoryPlugin**: Tracks mutation history
+
+### Integrating with State Machine
+
+```go
+// Create state machine
+definition := buildStateMachine()
+engine, _ := statemachine.NewEngine(definition, config, eventBus)
+
+// Create store adapter
+adapter, _ := statemachine.NewStateMachineStoreAdapter(engine, initialData)
+
+// Dispatch events via store pattern
+adapter.Dispatch(ctx, "approve", eventData)
+
+// Get current state
+currentState := adapter.GetCurrentState()
+```
+
+For complete documentation, see [`STORE_PATTERN.md`](STORE_PATTERN.md).
 
 ## Advanced Features
 
