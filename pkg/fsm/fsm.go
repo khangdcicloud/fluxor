@@ -8,19 +8,6 @@ import (
 	"github.com/fluxorio/fluxor/pkg/fluxor"
 )
 
-// State represents a state identifier (generic string for flexibility)
-type State string
-
-// Event represents an event identifier
-type Event string
-
-// Action is a function executed during transitions
-// Returns an error which can stop the transition or be logged
-type Action func(ctx context.Context, transition TransitionContext) error
-
-// Guard is a function that decides if a transition can occur
-type Guard func(ctx context.Context, transition TransitionContext) bool
-
 // TransitionType defines the type of transition
 type TransitionType int
 
@@ -31,177 +18,231 @@ const (
 	TransitionInternal
 )
 
+// Action is a function executed during transitions
+type Action[S comparable, E comparable] func(ctx context.Context, t TransitionContext[S, E]) error
+
+// Guard decides if a transition can occur
+type Guard[S comparable, E comparable] func(ctx context.Context, t TransitionContext[S, E]) bool
+
 // TransitionContext holds context about the current transition
-type TransitionContext struct {
-	FSM       *StateMachine
-	Event     Event
-	From      State
-	To        State
-	Data      any
+type TransitionContext[S comparable, E comparable] struct {
+	FSM   *StateMachine[S, E]
+	Event E
+	From  S
+	To    S
+	Data  any
 }
 
-// StateMachine implements a Finite State Machine
-// Thread-safe and reactive
-type StateMachine struct {
-	id           string
-	currentState State
-	states       map[State]*StateConfig
-	mu           sync.RWMutex
+// StateMachine implements a generic Finite State Machine using the Actor Model.
+// It processes events sequentially to prevent race conditions and deadlocks.
+type StateMachine[S comparable, E comparable] struct {
+	currentState S
+	states       map[S]*stateConfig[S, E]
 	
+	// Actor communication
+	cmdChan   chan command[S, E]
+	stateChan chan S // For synchronous state reads
+	closeChan chan struct{}
+	once      sync.Once
+
 	// Global interceptors
-	onTransition []func(TransitionContext)
+	onTransition []func(TransitionContext[S, E])
 }
 
-// StateConfig represents the configuration for a specific state
-type StateConfig struct {
-	state        State
-	onEntry      []Action
-	onExit       []Action
-	transitions  map[Event]*Transition
-	parent       *StateConfig // For hierarchical states (future)
+// Internal structures
+type stateConfig[S comparable, E comparable] struct {
+	state       S
+	onEntry     []Action[S, E]
+	onExit      []Action[S, E]
+	transitions map[E]*transition[S, E]
 }
 
-// Transition represents a state transition definition
-type Transition struct {
-	trigger Event
-	from    State
-	to      State
-	guard   Guard
-	actions []Action
+type transition[S comparable, E comparable] struct {
+	trigger E
+	from    S
+	to      S
+	guard   Guard[S, E]
+	actions []Action[S, E]
 	kind    TransitionType
 }
 
+// command interface for the actor loop
+type command[S comparable, E comparable] interface {
+	execute(sm *StateMachine[S, E])
+}
+
+type fireCommand[S comparable, E comparable] struct {
+	ctx     context.Context
+	event   E
+	data    any
+	promise *fluxor.PromiseT[S]
+}
+
+func (c fireCommand[S, E]) execute(sm *StateMachine[S, E]) {
+	sm.handleFire(c.ctx, c.event, c.data, c.promise)
+}
+
+type configCommand[S comparable, E comparable] struct {
+	state  S
+	config *stateConfig[S, E]
+}
+
+func (c configCommand[S, E]) execute(sm *StateMachine[S, E]) {
+	sm.states[c.state] = c.config
+}
+
 // New creates a new StateMachine with an initial state
-func New(id string, initialState State) *StateMachine {
-	return &StateMachine{
-		id:           id,
+func New[S comparable, E comparable](initialState S) *StateMachine[S, E] {
+	sm := &StateMachine[S, E]{
 		currentState: initialState,
-		states:       make(map[State]*StateConfig),
-		onTransition: make([]func(TransitionContext), 0),
+		states:       make(map[S]*stateConfig[S, E]),
+		cmdChan:      make(chan command[S, E], 100), // Buffered for performance
+		stateChan:    make(chan S),
+		closeChan:    make(chan struct{}),
+		onTransition: make([]func(TransitionContext[S, E]), 0),
+	}
+	go sm.loop()
+	return sm
+}
+
+// loop is the actor loop that processes all state mutations
+func (sm *StateMachine[S, E]) loop() {
+	for {
+		select {
+		case cmd := <-sm.cmdChan:
+			cmd.execute(sm)
+		case sm.stateChan <- sm.currentState:
+			// Serve current state reads
+		case <-sm.closeChan:
+			return
+		}
 	}
 }
 
-// CurrentState returns the current state
-func (sm *StateMachine) CurrentState() State {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.currentState
+// Close stops the state machine loop
+func (sm *StateMachine[S, E]) Close() {
+	sm.once.Do(func() {
+		close(sm.closeChan)
+	})
 }
 
-// Configure returns a StateConfigBuilder for the given state
-// If the state config doesn't exist, it creates one
-func (sm *StateMachine) Configure(state State) *StateConfigBuilder {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// CurrentState returns the current state synchronously
+func (sm *StateMachine[S, E]) CurrentState() S {
+	select {
+	case s := <-sm.stateChan:
+		return s
+	case <-sm.closeChan:
+		return sm.currentState // Return last known state on closed
+	}
+}
 
-	config, ok := sm.states[state]
+// Configure returns a Builder to configure a state.
+// Note: Configuration should ideally happen before firing events.
+// The builder updates the internal config map safely via the actor loop.
+func (sm *StateMachine[S, E]) Configure(state S) *StateConfigBuilder[S, E] {
+	return &StateConfigBuilder[S, E]{
+		sm:    sm,
+		state: state,
+	}
+}
+
+// Fire triggers an event and returns a FutureT[S]
+func (sm *StateMachine[S, E]) Fire(ctx context.Context, event E, data any) *fluxor.FutureT[S] {
+	promise := fluxor.NewPromiseT[S]()
+	
+	select {
+	case sm.cmdChan <- fireCommand[S, E]{
+		ctx:     ctx,
+		event:   event,
+		data:    data,
+		promise: promise,
+	}:
+		// Command sent
+	case <-sm.closeChan:
+		promise.Fail(fmt.Errorf("state machine is closed"))
+	}
+	
+	return &promise.FutureT
+}
+
+// Internal handleFire logic executed by the loop
+func (sm *StateMachine[S, E]) handleFire(ctx context.Context, event E, data any, promise *fluxor.PromiseT[S]) {
+	currentState := sm.currentState
+	
+	// 1. Find Config
+	config, ok := sm.states[currentState]
 	if !ok {
-		config = &StateConfig{
-			state:       state,
-			onEntry:     make([]Action, 0),
-			onExit:      make([]Action, 0),
-			transitions: make(map[Event]*Transition),
-		}
-		sm.states[state] = config
+		promise.Fail(fmt.Errorf("no configuration for state %v", currentState))
+		return
 	}
 
-	return &StateConfigBuilder{
-		config: config,
+	// 2. Find Transition
+	trans, ok := config.transitions[event]
+	if !ok {
+		promise.Fail(fmt.Errorf("no transition defined for event %v in state %v", event, currentState))
+		return
 	}
-}
 
-// Fire triggers an event and returns a FutureT[State]
-// The future completes with the new state, or fails with an error
-func (sm *StateMachine) Fire(ctx context.Context, event Event, data any) *fluxor.FutureT[State] {
-	promise := fluxor.NewPromiseT[State]()
+	// 3. Create Context
+	tCtx := TransitionContext[S, E]{
+		FSM:   sm,
+		Event: event,
+		From:  currentState,
+		To:    trans.to,
+		Data:  data,
+	}
 
-	// Execute in goroutine to be non-blocking/reactive
-	go func() {
-		sm.mu.Lock()
-		defer sm.mu.Unlock()
+	// 4. Check Guard
+	if trans.guard != nil && !trans.guard(ctx, tCtx) {
+		promise.Fail(fmt.Errorf("guard failed for transition %v -> %v", currentState, trans.to))
+		return
+	}
 
-		currentState := sm.currentState
-		stateConfig, ok := sm.states[currentState]
-		
-		// If no config for current state, cannot transition
-		if !ok {
-			promise.Fail(fmt.Errorf("no configuration for state %s", currentState))
-			return
-		}
-
-		// Check if transition exists for event
-		transition, ok := stateConfig.transitions[event]
-		if !ok {
-			promise.Fail(fmt.Errorf("no transition defined for event %s in state %s", event, currentState))
-			return
-		}
-
-		// Create transition context
-		tCtx := TransitionContext{
-			FSM:   sm,
-			Event: event,
-			From:  currentState,
-			To:    transition.to,
-			Data:  data,
-		}
-
-		// Check guard if present
-		if transition.guard != nil {
-			if !transition.guard(ctx, tCtx) {
-				promise.Fail(fmt.Errorf("guard failed for transition %s -> %s on event %s", currentState, transition.to, event))
+	// 5. Execute Exit Actions (if external)
+	if trans.kind == TransitionExternal {
+		for _, action := range config.onExit {
+			if err := action(ctx, tCtx); err != nil {
+				promise.Fail(fmt.Errorf("exit action failed: %w", err))
 				return
 			}
 		}
+	}
 
-		// 1. Execute Exit actions of current state (ONLY if External)
-		if transition.kind == TransitionExternal {
-			for _, action := range stateConfig.onExit {
+	// 6. Execute Transition Actions
+	for _, action := range trans.actions {
+		if err := action(ctx, tCtx); err != nil {
+			promise.Fail(fmt.Errorf("transition action failed: %w", err))
+			return
+		}
+	}
+
+	// 7. Update State
+	sm.currentState = trans.to
+
+	// 8. Execute Entry Actions (if external)
+	if trans.kind == TransitionExternal {
+		newConfig, ok := sm.states[trans.to]
+		if ok {
+			for _, action := range newConfig.onEntry {
 				if err := action(ctx, tCtx); err != nil {
-					promise.Fail(fmt.Errorf("exit action failed: %w", err))
+					// State updated, but entry failed. This is a critical error.
+					promise.Fail(fmt.Errorf("entry action failed: %w", err))
 					return
 				}
 			}
 		}
+	}
 
-		// 2. Execute Transition actions
-		for _, action := range transition.actions {
-			if err := action(ctx, tCtx); err != nil {
-				promise.Fail(fmt.Errorf("transition action failed: %w", err))
-				return
-			}
-		}
+	// 9. Notify Listeners
+	for _, l := range sm.onTransition {
+		l(tCtx)
+	}
 
-		// 3. Update State
-		sm.currentState = transition.to
-
-		// 4. Execute Entry actions of new state (ONLY if External)
-		if transition.kind == TransitionExternal {
-			newStateConfig, ok := sm.states[transition.to]
-			if ok {
-				for _, action := range newStateConfig.onEntry {
-					if err := action(ctx, tCtx); err != nil {
-						// State is already updated, but entry failed
-						promise.Fail(fmt.Errorf("entry action failed: %w", err))
-						return
-					}
-				}
-			}
-		}
-
-		// Notify global listeners
-		for _, listener := range sm.onTransition {
-			listener(tCtx)
-		}
-
-		promise.Complete(sm.currentState)
-	}()
-
-	return &promise.FutureT
+	promise.Complete(sm.currentState)
 }
 
-// OnTransition registers a global transition listener
-func (sm *StateMachine) OnTransition(listener func(TransitionContext)) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// OnTransition registers a global transition listener.
+// Note: This is not thread-safe if called concurrently with Fire. Call at setup.
+func (sm *StateMachine[S, E]) OnTransition(listener func(TransitionContext[S, E])) {
 	sm.onTransition = append(sm.onTransition, listener)
 }

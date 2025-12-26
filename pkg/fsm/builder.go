@@ -2,75 +2,109 @@ package fsm
 
 import "context"
 
-// StateConfigBuilder provides a fluent API for configuring states
-type StateConfigBuilder struct {
-	config *StateConfig
+// StateConfigBuilder provides a fluent API for configuring states.
+// It queues configuration updates to the StateMachine.
+type StateConfigBuilder[S comparable, E comparable] struct {
+	sm    *StateMachine[S, E]
+	state S
 }
 
-// Permit defines a allowed transition from the current state
-func (b *StateConfigBuilder) Permit(event Event, nextState State) *StateConfigBuilder {
+// Helper to safely update config in the actor loop
+func (b *StateConfigBuilder[S, E]) updateConfig(update func(*stateConfig[S, E])) {
+	// We send a command to the actor loop to update the configuration
+	// This ensures thread safety even if Configure is called dynamically (though not recommended)
+	b.sm.cmdChan <- &updateConfigCommand[S, E]{
+		state:  b.state,
+		update: update,
+	}
+}
+
+type updateConfigCommand[S comparable, E comparable] struct {
+	state  S
+	update func(*stateConfig[S, E])
+}
+
+func (c *updateConfigCommand[S, E]) execute(sm *StateMachine[S, E]) {
+	config, ok := sm.states[c.state]
+	if !ok {
+		config = &stateConfig[S, E]{
+			state:       c.state,
+			onEntry:     make([]Action[S, E], 0),
+			onExit:      make([]Action[S, E], 0),
+			transitions: make(map[E]*transition[S, E]),
+		}
+		sm.states[c.state] = config
+	}
+	c.update(config)
+}
+
+// Permit defines an allowed transition
+func (b *StateConfigBuilder[S, E]) Permit(event E, nextState S) *StateConfigBuilder[S, E] {
 	return b.PermitIf(event, nextState, nil)
 }
 
 // PermitIf defines a allowed transition if the guard returns true
-func (b *StateConfigBuilder) PermitIf(event Event, nextState State, guard Guard) *StateConfigBuilder {
-	b.config.transitions[event] = &Transition{
-		trigger: event,
-		from:    b.config.state,
-		to:      nextState,
-		guard:   guard,
-		actions: make([]Action, 0),
-		kind:    TransitionExternal,
-	}
+func (b *StateConfigBuilder[S, E]) PermitIf(event E, nextState S, guard Guard[S, E]) *StateConfigBuilder[S, E] {
+	b.updateConfig(func(c *stateConfig[S, E]) {
+		c.transitions[event] = &transition[S, E]{
+			trigger: event,
+			from:    b.state,
+			to:      nextState,
+			guard:   guard,
+			actions: make([]Action[S, E], 0),
+			kind:    TransitionExternal,
+		}
+	})
 	return b
 }
 
 // PermitWithAction defines a transition that executes an action
-func (b *StateConfigBuilder) PermitWithAction(event Event, nextState State, action Action) *StateConfigBuilder {
-	t := &Transition{
-		trigger: event,
-		from:    b.config.state,
-		to:      nextState,
-		actions: []Action{action},
-		kind:    TransitionExternal,
-	}
-	b.config.transitions[event] = t
+func (b *StateConfigBuilder[S, E]) PermitWithAction(event E, nextState S, action Action[S, E]) *StateConfigBuilder[S, E] {
+	b.updateConfig(func(c *stateConfig[S, E]) {
+		c.transitions[event] = &transition[S, E]{
+			trigger: event,
+			from:    b.state,
+			to:      nextState,
+			actions: []Action[S, E]{action},
+			kind:    TransitionExternal,
+		}
+	})
 	return b
 }
 
-// Ignore defines an event that should be ignored (no transition, no error)
-// For now, we don't explicitly track ignores, as Fire() errors on missing transition.
-// TODO: Implement explicit Ignore support if needed (would return current state with no error).
-func (b *StateConfigBuilder) Ignore(event Event) *StateConfigBuilder {
-	// Implemented as internal transition with no action
-	return b.InternalTransition(event, func(_ context.Context, _ TransitionContext) error {
+// Ignore defines an event that should be ignored
+func (b *StateConfigBuilder[S, E]) Ignore(event E) *StateConfigBuilder[S, E] {
+	return b.InternalTransition(event, func(_ context.Context, _ TransitionContext[S, E]) error {
 		return nil
 	})
 }
 
 // OnEntry adds an action to be executed when entering this state
-func (b *StateConfigBuilder) OnEntry(action Action) *StateConfigBuilder {
-	b.config.onEntry = append(b.config.onEntry, action)
+func (b *StateConfigBuilder[S, E]) OnEntry(action Action[S, E]) *StateConfigBuilder[S, E] {
+	b.updateConfig(func(c *stateConfig[S, E]) {
+		c.onEntry = append(c.onEntry, action)
+	})
 	return b
 }
 
 // OnExit adds an action to be executed when exiting this state
-func (b *StateConfigBuilder) OnExit(action Action) *StateConfigBuilder {
-	b.config.onExit = append(b.config.onExit, action)
+func (b *StateConfigBuilder[S, E]) OnExit(action Action[S, E]) *StateConfigBuilder[S, E] {
+	b.updateConfig(func(c *stateConfig[S, E]) {
+		c.onExit = append(c.onExit, action)
+	})
 	return b
 }
 
 // InternalTransition defines a transition that executes an action but stays in the same state
-// Importantly: OnEntry and OnExit handlers are NOT called
-func (b *StateConfigBuilder) InternalTransition(event Event, action Action) *StateConfigBuilder {
-	// Internal transition: to == from
-	t := &Transition{
-		trigger: event,
-		from:    b.config.state,
-		to:      b.config.state,
-		actions: []Action{action},
-		kind:    TransitionInternal,
-	}
-	b.config.transitions[event] = t
+func (b *StateConfigBuilder[S, E]) InternalTransition(event E, action Action[S, E]) *StateConfigBuilder[S, E] {
+	b.updateConfig(func(c *stateConfig[S, E]) {
+		c.transitions[event] = &transition[S, E]{
+			trigger: event,
+			from:    b.state,
+			to:      b.state,
+			actions: []Action[S, E]{action},
+			kind:    TransitionInternal,
+		}
+	})
 	return b
 }

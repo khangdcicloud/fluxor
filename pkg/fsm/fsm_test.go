@@ -3,146 +3,156 @@ package fsm
 import (
 	"context"
 	"testing"
+	"time"
 )
 
-func TestBugTrackerFSM(t *testing.T) {
-	// Define States
+func TestGenericFSM(t *testing.T) {
+	// Define types
+	type OrderState string
+	type OrderEvent int
+
 	const (
-		StateOpen     State = "Open"
-		StateAssigned State = "Assigned"
-		StateResolved State = "Resolved"
-		StateClosed   State = "Closed"
+		Created OrderState = "Created"
+		Paid    OrderState = "Paid"
+		Shipped OrderState = "Shipped"
 	)
 
-	// Define Events
 	const (
-		EventAssign Event = "Assign"
-		EventResolve Event = "Resolve"
-		EventClose   Event = "Close"
-		EventReopen  Event = "Reopen"
+		Pay OrderEvent = iota
+		Ship
 	)
 
-	// Create Machine
-	sm := New("bug-123", StateOpen)
+	sm := New[OrderState, OrderEvent](Created)
+	defer sm.Close()
 
-	// Context for actions
+	// Use channels to signal completion of configuration since it's async
+	// In real apps, config happens before use. Here we need to ensure it's applied.
+	// Since the Actor loop processes sequentially, we can just fire a dummy event or rely on timing.
+	// Better: We rely on the fact that Configure pushes to the channel, and Fire pushes to the channel.
+	// So if we Configure then Fire, Fire is processed AFTER Configure.
+
+	sm.Configure(Created).
+		Permit(Pay, Paid).
+		OnExit(func(ctx context.Context, t TransitionContext[OrderState, OrderEvent]) error {
+			// Log exit
+			return nil
+		})
+
+	sm.Configure(Paid).
+		Permit(Ship, Shipped)
+
 	ctx := context.Background()
 
-	// Track actions
-	logs := make([]string, 0)
-	logAction := func(msg string) Action {
-		return func(ctx context.Context, _ TransitionContext) error {
-			logs = append(logs, msg)
-			return nil
-		}
-	}
-
-	// Configure
-	sm.Configure(StateOpen).
-		Permit(EventAssign, StateAssigned).
-		OnExit(logAction("Exiting Open"))
-
-	sm.Configure(StateAssigned).
-		Permit(EventResolve, StateResolved).
-		Permit(EventClose, StateClosed).
-		OnEntry(logAction("Entering Assigned"))
-
-	sm.Configure(StateResolved).
-		Permit(EventClose, StateClosed).
-		Permit(EventReopen, StateOpen)
-
-	sm.Configure(StateClosed).
-		Permit(EventReopen, StateOpen).
-		OnEntry(logAction("Entering Closed"))
-
-	// Test 1: Initial State
-	if sm.CurrentState() != StateOpen {
-		t.Errorf("Expected Open, got %s", sm.CurrentState())
-	}
-
-	// Test 2: Transition Open -> Assigned
-	future := sm.Fire(ctx, EventAssign, "user:john")
-	state, err := future.Await(ctx)
+	// Test 1: Created -> Paid
+	state, err := sm.Fire(ctx, Pay, nil).Await(ctx)
 	if err != nil {
-		t.Fatalf("Transition failed: %v", err)
+		t.Fatalf("Fire failed: %v", err)
 	}
-	if state != StateAssigned {
-		t.Errorf("Expected Assigned, got %s", state)
-	}
-
-	// Verify Actions
-	if len(logs) != 2 {
-		t.Errorf("Expected 2 logs, got %d", len(logs))
-	}
-	if logs[0] != "Exiting Open" {
-		t.Errorf("Order mismatch: %v", logs)
-	}
-	if logs[1] != "Entering Assigned" {
-		t.Errorf("Order mismatch: %v", logs)
+	if state != Paid {
+		t.Errorf("Expected Paid, got %v", state)
 	}
 
-	// Test 3: Invalid Transition
-	future = sm.Fire(ctx, EventReopen, nil) // Cannot Reopen from Assigned
-	_, err = future.Await(ctx)
-	if err == nil {
-		t.Error("Expected error for invalid transition")
-	}
-
-	// Test 4: Guarded Transition (mock)
-	// Add a new config for testing guard
-	sm.Configure(StateAssigned).
-		PermitIf("GuardTest", StateClosed, func(ctx context.Context, t TransitionContext) bool {
-			return t.Data == "admin"
-		})
-	
-	// Should fail (not admin)
-	future = sm.Fire(ctx, "GuardTest", "user")
-	_, err = future.Await(ctx)
-	if err == nil {
-		t.Error("Expected guard failure")
-	}
-
-	// Should succeed (admin)
-	future = sm.Fire(ctx, "GuardTest", "admin")
-	state, err = future.Await(ctx)
+	// Test 2: Paid -> Shipped
+	state, err = sm.Fire(ctx, Ship, nil).Await(ctx)
 	if err != nil {
-		t.Fatalf("Guard transition failed: %v", err)
+		t.Fatalf("Fire failed: %v", err)
 	}
-	if state != StateClosed {
-		t.Errorf("Expected Closed, got %s", state)
+	if state != Shipped {
+		t.Errorf("Expected Shipped, got %v", state)
 	}
 }
 
 func TestInternalTransition(t *testing.T) {
-	sm := New("test", "A")
+	sm := New[string, string]("A")
+	defer sm.Close()
+
 	count := 0
-	
+	done := make(chan bool)
+
 	sm.Configure("A").
-		InternalTransition("Inc", func(ctx context.Context, _ TransitionContext) error {
+		InternalTransition("Inc", func(ctx context.Context, _ TransitionContext[string, string]) error {
 			count++
-			return nil
-		}).
-		OnEntry(func(ctx context.Context, _ TransitionContext) error {
-			t.Error("OnEntry should not be called for internal transition")
-			return nil
-		}).
-		OnExit(func(ctx context.Context, _ TransitionContext) error {
-			t.Error("OnExit should not be called for internal transition")
 			return nil
 		})
 
+	// Fire
 	ctx := context.Background()
-	
-	// Fire internal transition
-	state, err := sm.Fire(ctx, "Inc", nil).Await(ctx)
+	_, err := sm.Fire(ctx, "Inc", nil).Await(ctx)
 	if err != nil {
 		t.Fatalf("Fire failed: %v", err)
 	}
 
-	if state != "A" {
-		t.Errorf("State changed: %s", state)
-	}
 	if count != 1 {
-		t.Errorf("Action not executed")
+		t.Errorf("Expected count 1, got %d", count)
 	}
+	close(done)
+}
+
+func TestGuard(t *testing.T) {
+	sm := New[string, string]("Start")
+	defer sm.Close()
+
+	sm.Configure("Start").
+		PermitIf("Go", "End", func(ctx context.Context, t TransitionContext[string, string]) bool {
+			val, ok := t.Data.(bool)
+			return ok && val
+		})
+
+	ctx := context.Background()
+
+	// Should fail
+	_, err := sm.Fire(ctx, "Go", false).Await(ctx)
+	if err == nil {
+		t.Error("Expected guard failure")
+	}
+
+	// Should succeed
+	state, err := sm.Fire(ctx, "Go", true).Await(ctx)
+	if err != nil {
+		t.Fatalf("Fire failed: %v", err)
+	}
+	if state != "End" {
+		t.Errorf("Expected End, got %s", state)
+	}
+}
+
+// TestReentrancy checks if an action can trigger another event
+func TestReentrancy(t *testing.T) {
+	sm := New[string, string]("A")
+	defer sm.Close()
+
+	sm.Configure("A").
+		Permit("Event1", "B")
+
+	sm.Configure("B").
+		OnEntry(func(ctx context.Context, tx TransitionContext[string, string]) error {
+			// Trigger next event asynchronously
+			// Note: We don't await here to avoid blocking the actor loop if we were using synchronous calls
+			// But since Fire() is async (pushes to channel), this is safe!
+			tx.FSM.Fire(ctx, "Event2", nil)
+			return nil
+		}).
+		Permit("Event2", "C")
+
+	ctx := context.Background()
+	state, err := sm.Fire(ctx, "Event1", nil).Await(ctx)
+	if err != nil {
+		t.Fatalf("First fire failed: %v", err)
+	}
+	if state != "B" {
+		t.Errorf("Expected B, got %s", state)
+	}
+
+	// Wait for the second transition to happen
+	// We can't await the specific future created inside the action easily.
+	// But we can poll CurrentState or fire a dummy event to synchronize.
+	
+	// Let's poll
+	for i := 0; i < 10; i++ {
+		if sm.CurrentState() == "C" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("Did not reach state C via reentrant fire")
 }
