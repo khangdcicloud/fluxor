@@ -186,7 +186,7 @@ func (f *future) Map(fn func(interface{}) interface{}) Future {
 // Await waits for the future to complete and returns the result
 // Provides async/await-style syntax: result, err := future.Await(ctx)
 func (f *future) Await(ctx context.Context) (interface{}, error) {
-	// Check if already completed
+	// Always check completed state first (handles multiple Await calls)
 	f.mu.RLock()
 	if f.completed {
 		result := f.result
@@ -198,15 +198,36 @@ func (f *future) Await(ctx context.Context) (interface{}, error) {
 	}
 	f.mu.RUnlock()
 
-	// Wait for completion or context cancellation
-	select {
-	case result := <-f.resultChan:
-		if result.Error != nil {
-			return nil, result.Error
+	// Wait with periodic recheck (handles race condition)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case result := <-f.resultChan:
+			// Put it back for other Await calls
+			select {
+			case f.resultChan <- result:
+			default:
+			}
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			return result.Value, nil
+		case <-ticker.C:
+			f.mu.RLock()
+			if f.completed {
+				result := f.result
+				f.mu.RUnlock()
+				if result.Error != nil {
+					return nil, result.Error
+				}
+				return result.Value, nil
+			}
+			f.mu.RUnlock()
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-		return result.Value, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 }
 
@@ -265,13 +286,21 @@ func NewPromise() Promise {
 }
 
 func (p *promise) TryComplete(result interface{}) bool {
-	p.Complete(result)
-	return true
+	completed := false
+	p.Future.(*future).once.Do(func() {
+		completed = true
+		p.Future.Complete(result)
+	})
+	return completed
 }
 
 func (p *promise) TryFail(err error) bool {
-	p.Fail(err)
-	return true
+	completed := false
+	p.Future.(*future).once.Do(func() {
+		completed = true
+		p.Future.Fail(err)
+	})
+	return completed
 }
 
 // ReactiveVerticle is a verticle that uses reactive patterns
@@ -291,17 +320,13 @@ func NewReactiveVerticle(vertx core.Vertx) *ReactiveVerticle {
 func (rv *ReactiveVerticle) ExecuteReactive(ctx context.Context, address string, data interface{}) Future {
 	promise := NewPromise()
 
-	// Send request via event bus
-	msg, err := rv.vertx.EventBus().Request(address, data, 5*time.Second)
-	if err != nil {
-		promise.Fail(err)
-		return promise
-	}
-
-	// Handle reply asynchronously
+	// Make the request async
 	go func() {
-		// In a real implementation, we'd wait for the reply message
-		// For now, we'll complete with the message body
+		msg, err := rv.vertx.EventBus().Request(address, data, 5*time.Second)
+		if err != nil {
+			promise.Fail(err)
+			return
+		}
 		if msg.Body() != nil {
 			promise.Complete(msg.Body())
 		} else {

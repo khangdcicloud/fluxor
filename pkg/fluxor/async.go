@@ -2,6 +2,7 @@ package fluxor
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/fluxorio/fluxor/pkg/core"
@@ -279,14 +280,32 @@ func All[T any](ctx context.Context, futures ...interface {
 	promise := NewPromiseT[[]T]()
 
 	go func() {
-		results := make([]T, 0, len(futures))
-		for _, f := range futures {
-			result, err := f.Await(ctx)
+		results := make([]T, len(futures))
+		errors := make([]error, len(futures))
+		var wg sync.WaitGroup
+		
+		// Wait for all concurrently
+		for i, f := range futures {
+			wg.Add(1)
+			go func(idx int, future interface{ Await(context.Context) (T, error) }) {
+				defer wg.Done()
+				result, err := future.Await(ctx)
+				if err != nil {
+					errors[idx] = err
+				} else {
+					results[idx] = result
+				}
+			}(i, f)
+		}
+		
+		wg.Wait()
+		
+		// Check for any errors
+		for _, err := range errors {
 			if err != nil {
 				promise.Fail(err)
 				return
 			}
-			results = append(results, result)
 		}
 		promise.Complete(results)
 	}()
@@ -300,8 +319,13 @@ func Race[T any](ctx context.Context, futures ...interface {
 	Await(context.Context) (T, error)
 }) *FutureT[T] {
 	promise := NewPromiseT[T]()
+	
+	// Create cancellable context for race
+	raceCtx, cancel := context.WithCancel(ctx)
 
 	go func() {
+		defer cancel() // Cancel all other Awaits when done
+		
 		resultChan := make(chan T, 1)
 		errChan := make(chan error, 1)
 
@@ -309,7 +333,7 @@ func Race[T any](ctx context.Context, futures ...interface {
 			go func(future interface {
 				Await(context.Context) (T, error)
 			}) {
-				result, err := future.Await(ctx)
+				result, err := future.Await(raceCtx) // Uses raceCtx!
 				if err != nil {
 					select {
 					case errChan <- err:
