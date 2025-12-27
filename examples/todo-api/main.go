@@ -154,7 +154,7 @@ func setupApplication(database *sql.DB, jwtSecret string) func(map[reflect.Type]
 		// Health and metrics endpoints - wrap with metrics middleware
 		router.GETFast("/health", metricsMiddleware(func(ctx *web.FastRequestContext) error {
 			return ctx.JSON(200, map[string]interface{}{
-				"status": "UP",
+				"status":  "UP",
 				"service": "todo-api",
 			})
 		}))
@@ -183,10 +183,11 @@ func setupApplication(database *sql.DB, jwtSecret string) func(map[reflect.Type]
 		// Update server handler to use router
 		server.SetHandler(func(ctx *fasthttp.RequestCtx) {
 			reqCtx := &web.FastRequestContext{
-				RequestCtx: ctx,
-				GoCMD:      vertx,
-				EventBus:   vertx.EventBus(),
-				Params:     make(map[string]string),
+				BaseRequestContext: core.NewBaseRequestContext(),
+				RequestCtx:         ctx,
+				GoCMD:              vertx,
+				EventBus:           vertx.EventBus(),
+				Params:             make(map[string]string),
 			}
 			router.ServeFastHTTP(reqCtx)
 		})
