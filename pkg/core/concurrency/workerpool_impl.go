@@ -145,7 +145,7 @@ func (wp *defaultWorkerPool) Stop(ctx context.Context) error {
 func (wp *defaultWorkerPool) Submit(task Task) error {
 	// Fail-fast: task cannot be nil
 	if task == nil {
-		failFastIf(true, "task cannot be nil")
+		return fmt.Errorf("task cannot be nil")
 	}
 
 	if atomic.LoadInt32(&wp.running) == 0 {

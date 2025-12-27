@@ -113,7 +113,7 @@ func (e *defaultExecutor) worker(id int) {
 func (e *defaultExecutor) Submit(task Task) error {
 	// Fail-fast: task cannot be nil
 	if task == nil {
-		failFastIf(true, "task cannot be nil")
+		return fmt.Errorf("task cannot be nil")
 	}
 
 	e.mu.RLock()
@@ -142,11 +142,11 @@ func (e *defaultExecutor) Submit(task Task) error {
 func (e *defaultExecutor) SubmitWithTimeout(task Task, timeout time.Duration) error {
 	// Fail-fast: task cannot be nil
 	if task == nil {
-		failFastIf(true, "task cannot be nil")
+		return fmt.Errorf("task cannot be nil")
 	}
 	// Fail-fast: timeout must be positive
 	if timeout <= 0 {
-		failFastIf(true, "timeout must be positive")
+		return fmt.Errorf("timeout must be positive")
 	}
 
 	e.mu.RLock()
