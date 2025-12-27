@@ -28,6 +28,8 @@ jobs:
 
     - name: Cache Go modules
       uses: actions/cache@v4
+      id: cache
+      continue-on-error: true
       with:
         path: |
           ~/.cache/go-build
@@ -35,6 +37,12 @@ jobs:
         key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-${{ matrix.go-version }}-
+    
+    - name: Clean cache on error
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        rm -rf ~/.cache/go-build || true
+        rm -rf ~/go/pkg/mod || true
 
     - name: Download dependencies
       run: go mod download
@@ -54,7 +62,15 @@ jobs:
         fi
 
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      timeout-minutes: 15
+      run: |
+        # Run tests with timeout and better error handling
+        go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 10m ./... || {
+          echo "Tests failed. Checking for specific issues..."
+          # List any test files that might have issues
+          find . -name "*_test.go" -type f | head -20
+          exit 1
+        }
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
@@ -170,6 +186,8 @@ jobs:
 
     - name: Cache Go modules
       uses: actions/cache@v4
+      id: cache-examples
+      continue-on-error: true
       with:
         path: |
           ~/.cache/go-build
@@ -177,6 +195,12 @@ jobs:
         key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-${{ matrix.go-version }}-
+    
+    - name: Clean cache on error
+      if: steps.cache-examples.outputs.cache-hit != 'true'
+      run: |
+        rm -rf ~/.cache/go-build || true
+        rm -rf ~/go/pkg/mod || true
 
     - name: Download dependencies
       run: go mod download

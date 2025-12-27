@@ -5,24 +5,79 @@ This directory contains k6 load testing scripts for the Fluxor framework.
 ## Prerequisites
 
 Install k6:
-```bash
-# macOS
-brew install k6
 
-# Linux
+### Windows
+
+**Option 1: Manual Installation (Recommended)**
+1. Download k6 from: https://github.com/grafana/k6/releases/latest
+2. Download the Windows executable (e.g., `k6-v0.48.0-windows-amd64.exe`)
+3. Rename it to `k6.exe`
+4. Place it in a folder (e.g., `C:\k6\`) or in the `loadtest` directory
+5. Add the folder to your PATH environment variable:
+   ```powershell
+   # Add to user PATH
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\k6", "User")
+   ```
+   Or use the GUI: System Properties → Environment Variables → Edit PATH
+
+**Option 2: Using Chocolatey (Requires Administrator)**
+```powershell
+# Run PowerShell as Administrator
+choco install k6 -y
+```
+
+**Option 3: Using Scoop**
+```powershell
+scoop install k6
+```
+
+**Option 4: Automated Install Script**
+```powershell
+cd loadtest
+powershell -ExecutionPolicy Bypass -File .\install_k6.ps1
+```
+
+**Verify Installation:**
+```powershell
+k6 version
+```
+
+### macOS
+```bash
+brew install k6
+```
+
+### Linux
+```bash
 sudo gpg -k
 sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
 echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
 sudo apt-get update
 sudo apt-get install k6
+```
 
-# Docker
+### Docker
+```bash
 docker pull grafana/k6
 ```
 
 ## Running Tests
 
 ### 1. Start the server
+
+**Windows (PowerShell):**
+```powershell
+# Option 1: Using the simple test server
+cd loadtest
+.\simple_server.exe
+# Or: go run simple_server.go
+
+# Option 2: Using the main enterprise server
+cd C:\Users\khangpc\Desktop\fluxor
+go run cmd/enterprise/main.go
+```
+
+**Linux/macOS:**
 ```bash
 cd /workspace
 go run cmd/enterprise/main.go
@@ -31,26 +86,80 @@ go run cmd/enterprise/main.go
 ### 2. Run load tests
 
 #### Load Test (10k concurrent users)
+
+**Windows (PowerShell):**
+```powershell
+k6 run loadtest\load-test.js
+# Or if k6.exe is in the loadtest folder:
+.\k6.exe run loadtest\load-test.js
+```
+
+**Linux/macOS:**
 ```bash
 k6 run loadtest/load-test.js
 ```
 
 #### Spike Test (sudden traffic burst)
+
+**Windows:**
+```powershell
+k6 run loadtest\spike-test.js
+```
+
+**Linux/macOS:**
 ```bash
 k6 run loadtest/spike-test.js
 ```
 
 #### Stress Test (find breaking point)
+
+**Windows:**
+```powershell
+k6 run loadtest\stress-test.js
+```
+
+**Linux/macOS:**
 ```bash
 k6 run loadtest/stress-test.js
 ```
 
+#### Smoke Test (quick validation)
+
+**Windows:**
+```powershell
+k6 run loadtest\smoke_test.js
+```
+
+**Linux/macOS:**
+```bash
+k6 run loadtest/smoke_test.js
+```
+
 ### 3. Run with custom base URL
+
+**Windows (PowerShell):**
+```powershell
+# Method 1: Environment variable
+$env:BASE_URL="http://localhost:8080"
+k6 run loadtest\load-test.js
+
+# Method 2: Inline environment variable
+k6 run -e BASE_URL=http://localhost:8080 loadtest\load-test.js
+```
+
+**Linux/macOS:**
 ```bash
 BASE_URL=http://localhost:8080 k6 run loadtest/load-test.js
 ```
 
 ### 4. Run with results output
+
+**Windows:**
+```powershell
+k6 run --out json=results.json loadtest\load-test.js
+```
+
+**Linux/macOS:**
 ```bash
 k6 run --out json=results.json loadtest/load-test.js
 ```
@@ -141,17 +250,39 @@ Results are uploaded as artifacts and can be viewed in GitHub Actions.
 ## Advanced Usage
 
 ### Run with custom VUs
+
+**Windows:**
+```powershell
+k6 run --vus 1000 --duration 30s loadtest\load-test.js
+```
+
+**Linux/macOS:**
 ```bash
 k6 run --vus 1000 --duration 30s loadtest/load-test.js
 ```
 
 ### Generate HTML report
+
+**Windows:**
+```powershell
+k6 run --out json=results.json loadtest\load-test.js
+k6 report results.json --out html=report.html
+```
+
+**Linux/macOS:**
 ```bash
 k6 run --out json=results.json loadtest/load-test.js
 k6 report results.json --out html=report.html
 ```
 
 ### Run in Docker
+
+**Windows (PowerShell):**
+```powershell
+docker run --network=host -v ${PWD}/loadtest:/scripts grafana/k6 run /scripts/load-test.js
+```
+
+**Linux/macOS:**
 ```bash
 docker run --network=host -v $PWD/loadtest:/scripts grafana/k6 run /scripts/load-test.js
 ```
@@ -172,18 +303,40 @@ Monitor these metrics during load tests:
 - Ensure server is running
 - Check port (default: 8080)
 - Verify firewall settings
+- **Windows**: Check Windows Firewall and allow port 8080 if needed
+- **Windows**: Verify the server is listening: `netstat -an | findstr :8080`
+
+### k6 not found (Windows)
+- Verify k6 is installed: `k6 version`
+- Check if k6.exe is in your PATH
+- If k6.exe is in the loadtest folder, use: `.\k6.exe run smoke_test.js`
+- Restart PowerShell/terminal after adding to PATH
+- Try running PowerShell as Administrator
 
 ### High error rates
 - Check server logs
 - Review rate limiting settings
 - Verify database connectivity
-- Check resource limits (ulimit, file descriptors)
+- Check resource limits
+  - **Windows**: Check Task Manager for CPU/Memory usage
+  - **Linux/macOS**: Check ulimit, file descriptors
 
 ### Timeout errors
 - Increase server timeout settings
 - Check network latency
 - Review slow endpoints
 - Optimize database queries
+- **Windows**: Check Windows Defender or antivirus software that might interfere
+
+### Permission errors (Windows)
+- Run PowerShell as Administrator for Chocolatey installation
+- Check file permissions for k6.exe
+- Verify execution policy: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+
+### Path issues (Windows)
+- Use backslashes (`\`) in paths: `loadtest\load-test.js`
+- Or use forward slashes (`/`) which also work in PowerShell
+- Use quotes if path contains spaces: `k6 run "loadtest\load test.js"`
 
 ## Best Practices
 
@@ -207,9 +360,70 @@ Based on Fluxor configuration (67% utilization, 5000 max CCU):
 - **Target P99**: < 50ms under normal load
 - **Error rate**: < 0.1% under normal load
 
+## Windows-Specific Notes
+
+### Running the Simple Test Server
+
+The `loadtest` folder includes a simple test server (`simple_server.go`) for quick testing:
+
+**Start the server:**
+```powershell
+cd loadtest
+.\simple_server.exe
+# Or: go run simple_server.go
+```
+
+**Server endpoints:**
+- `GET http://localhost:8080/health` - Health check
+- `GET http://localhost:8080/ready` - Readiness check
+- `GET http://localhost:8080/api/status` - Status with timestamp
+- `POST http://localhost:8080/api/echo` - Echo back JSON data
+
+**Test the server:**
+```powershell
+# Health check
+Invoke-WebRequest -Uri http://localhost:8080/health -UseBasicParsing
+
+# Status
+Invoke-WebRequest -Uri http://localhost:8080/api/status -UseBasicParsing
+```
+
+### PowerShell Scripts
+
+The `loadtest` folder includes helper scripts:
+- `run_server.ps1` - Start the simple test server
+- `install_k6.ps1` - Automated k6 installation script
+
+**Usage:**
+```powershell
+# Run server
+.\run_server.ps1
+
+# Install k6 (requires internet connection)
+powershell -ExecutionPolicy Bypass -File .\install_k6.ps1
+```
+
+### Environment Variables in PowerShell
+
+When setting environment variables in PowerShell:
+```powershell
+# Set for current session
+$env:BASE_URL="http://localhost:8080"
+
+# Set permanently (user level)
+[Environment]::SetEnvironmentVariable("BASE_URL", "http://localhost:8080", "User")
+```
+
+### File Paths
+
+- Use backslashes (`\`) or forward slashes (`/`) - both work in PowerShell
+- Use quotes for paths with spaces
+- Relative paths work from the project root or loadtest folder
+
 ## References
 
 - [k6 Documentation](https://k6.io/docs/)
 - [k6 Test Types](https://k6.io/docs/test-types/)
 - [k6 Metrics](https://k6.io/docs/using-k6/metrics/)
 - [k6 Thresholds](https://k6.io/docs/using-k6/thresholds/)
+- [k6 Windows Installation](https://k6.io/docs/getting-started/installation/#windows)
