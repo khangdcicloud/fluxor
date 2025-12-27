@@ -21,6 +21,21 @@ func TestDeploymentState_SyncVerticle(t *testing.T) {
 		t.Fatalf("DeployVerticle() error = %v", err)
 	}
 
+	// Wait for async start to complete
+	// Since Start() is async, we need to wait for it to finish
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		vx.mu.RLock()
+		dep, exists := vx.deployments[deploymentID]
+		if exists && dep.state == DeploymentStateStarted {
+			vx.mu.RUnlock()
+			// State is STARTED - success!
+			return
+		}
+		vx.mu.RUnlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// After successful deploy, state should be STARTED
 	vx.mu.RLock()
 	dep, exists := vx.deployments[deploymentID]
@@ -41,9 +56,23 @@ func TestDeploymentState_SyncVerticleFailure(t *testing.T) {
 	defer vx.Close()
 
 	verticle := &failingStartVerticle{}
-	_, err := vx.DeployVerticle(verticle)
-	if err == nil {
-		t.Fatalf("DeployVerticle() expected error")
+	deploymentID, err := vx.DeployVerticle(verticle)
+	if err != nil {
+		t.Fatalf("DeployVerticle() should not return error (start is async), got %v", err)
+	}
+
+	// Wait for async start to complete and fail
+	// The goroutine will remove the deployment from map on failure
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		vx.mu.RLock()
+		_, exists := vx.deployments[deploymentID]
+		vx.mu.RUnlock()
+		if !exists {
+			// Deployment removed - failure handled correctly
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Deployment should be removed from map on failure
@@ -192,6 +221,19 @@ func TestDeploymentState_Undeploy_Stopping(t *testing.T) {
 		t.Fatalf("DeployVerticle() error = %v", err)
 	}
 
+	// Wait for async start to complete before undeploying
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		vx.mu.RLock()
+		dep, exists := vx.deployments[deploymentID]
+		if exists && dep.state == DeploymentStateStarted {
+			vx.mu.RUnlock()
+			break
+		}
+		vx.mu.RUnlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// Undeploy should transition to STOPPED
 	err = vx.UndeployVerticle(deploymentID)
 	if err != nil {
@@ -247,6 +289,19 @@ func TestDeploymentState_Undeploy_DoubleUndeploy(t *testing.T) {
 	deploymentID, err := vx.DeployVerticle(verticle)
 	if err != nil {
 		t.Fatalf("DeployVerticle() error = %v", err)
+	}
+
+	// Wait for async start to complete before undeploying
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		vx.mu.RLock()
+		dep, exists := vx.deployments[deploymentID]
+		if exists && dep.state == DeploymentStateStarted {
+			vx.mu.RUnlock()
+			break
+		}
+		vx.mu.RUnlock()
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// First undeploy should succeed
@@ -336,9 +391,34 @@ func TestDeploymentState_ConcurrentDeploy(t *testing.T) {
 		t.Errorf("concurrent deploy error: %v", err)
 	}
 
+	// Collect all deployment IDs
+	ids := make([]string, 0, numDeployments)
+	for id := range deploymentIDs {
+		ids = append(ids, id)
+	}
+
+	// Wait for all async starts to complete
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		allStarted := true
+		for _, id := range ids {
+			vx.mu.RLock()
+			dep, exists := vx.deployments[id]
+			vx.mu.RUnlock()
+			if !exists || dep.state != DeploymentStateStarted {
+				allStarted = false
+				break
+			}
+		}
+		if allStarted {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	// Verify all deployments exist and are STARTED
 	count := 0
-	for id := range deploymentIDs {
+	for _, id := range ids {
 		count++
 		vx.mu.RLock()
 		dep, exists := vx.deployments[id]
@@ -395,6 +475,22 @@ func TestDeploymentState_CloseUndeploysAll(t *testing.T) {
 		if err != nil {
 			t.Fatalf("DeployVerticle() error = %v", err)
 		}
+	}
+
+	// Wait for all async starts to complete
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		allStarted := true
+		for _, v := range verticles {
+			if !v.started {
+				allStarted = false
+				break
+			}
+		}
+		if allStarted {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Verify all started

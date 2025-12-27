@@ -42,6 +42,15 @@ func TestGoCMD_DeployVerticle(t *testing.T) {
 	if deploymentID == "" {
 		t.Error("DeployVerticle() returned empty deployment ID")
 	}
+
+	// Wait for async start to complete
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if verticle.started {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !verticle.started {
 		t.Error("Verticle should be started")
 	}
@@ -69,6 +78,15 @@ func TestGoCMD_UndeployVerticle(t *testing.T) {
 	deploymentID, err := gocmd.DeployVerticle(verticle)
 	if err != nil {
 		t.Fatalf("DeployVerticle() error = %v", err)
+	}
+
+	// Wait for async start to complete before undeploying
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if verticle.started {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	err = gocmd.UndeployVerticle(deploymentID)
@@ -131,11 +149,30 @@ func TestGoCMD_DeployVerticle_FailFast_StartError(t *testing.T) {
 	gocmd := NewGoCMD(ctx)
 	defer gocmd.Close()
 
+	// Since Start() is now async, DeployVerticle() always succeeds
+	// The error is handled asynchronously and deployment is removed from map
 	id, err := gocmd.DeployVerticle(&failingStartVerticle{})
-	if err == nil {
-		t.Fatalf("DeployVerticle() expected error when Start() fails")
+	if err != nil {
+		t.Fatalf("DeployVerticle() should not return error (start is async), got %v", err)
 	}
-	if id != "" {
-		t.Fatalf("DeployVerticle() id = %q, want empty on start failure", id)
+	if id == "" {
+		t.Fatalf("DeployVerticle() should return deployment ID, got empty")
+	}
+
+	// Wait for async start to complete and fail
+	// The goroutine will remove the deployment from map on failure
+	// Use DeploymentCount() to verify deployment was removed
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if gocmd.DeploymentCount() == 0 {
+			// Deployment removed - failure handled correctly
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Verify deployment was removed
+	if gocmd.DeploymentCount() != 0 {
+		t.Errorf("expected 0 deployments after start failure, got %d", gocmd.DeploymentCount())
 	}
 }

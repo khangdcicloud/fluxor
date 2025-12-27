@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestNewFluxorContext(t *testing.T) {
@@ -68,6 +69,14 @@ func TestFluxorContext_Deploy(t *testing.T) {
 		t.Error("Deploy() returned empty deployment ID")
 	}
 
+	// Wait for async start to complete
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if verticle.started {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !verticle.started {
 		t.Error("Verticle should be started")
 	}
@@ -84,6 +93,15 @@ func TestFluxorContext_Undeploy(t *testing.T) {
 	deploymentID, err := fluxorCtx.Deploy(verticle)
 	if err != nil {
 		t.Fatalf("Deploy() error = %v", err)
+	}
+
+	// Wait for async start to complete before undeploying
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if verticle.started {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	err = fluxorCtx.Undeploy(deploymentID)
