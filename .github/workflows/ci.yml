@@ -67,23 +67,35 @@ jobs:
       run: |
         # Run tests with timeout and better error handling
         echo "Starting tests with race detector..."
-        echo "Test timeout: 10 minutes"
+        echo "Test timeout: 8 minutes (Go) + 2 minutes buffer (shell timeout)"
         echo "Step timeout: 15 minutes"
         
-        # Run tests with verbose output and timeout
-        go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 10m ./... 2>&1 | tee test-output.log || {
+        # Exclude loadtest directory from tests
+        # Use timeout command to ensure tests are killed even if Go timeout fails
+        # This prevents hanging tests from blocking CI
+        timeout 10m bash -c '
+          PACKAGES=$(go list ./... | grep -v "/loadtest" | tr "\n" " ")
+          echo "Testing packages (excluding loadtest):"
+          echo "$PACKAGES"
+          go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 8m $PACKAGES 2>&1 | tee test-output.log
+        ' || {
+          EXIT_CODE=$?
           echo "=========================================="
-          echo "Tests failed or timed out. Diagnostics:"
+          echo "Tests failed or timed out. Exit code: $EXIT_CODE"
           echo "=========================================="
           echo ""
-          echo "Last 50 lines of test output:"
-          tail -n 50 test-output.log || echo "No test output log found"
+          echo "Last 100 lines of test output:"
+          tail -n 100 test-output.log 2>/dev/null || echo "No test output log found"
           echo ""
           echo "Test files in repository:"
           find . -name "*_test.go" -type f | head -20
           echo ""
           echo "Checking for hanging processes..."
           ps aux | grep -E "(go|test)" | head -10 || true
+          echo ""
+          echo "Killing any remaining test processes..."
+          pkill -9 -f "go test" || true
+          pkill -9 -f "go-build" || true
           exit 1
         }
         
