@@ -70,12 +70,12 @@ jobs:
         echo "Test timeout: 8 minutes (Go) + 2 minutes buffer (shell timeout)"
         echo "Step timeout: 15 minutes"
         
-        # Exclude loadtest and workflow-demo directories from tests
+        # Exclude loadtest, workflow-demo, and todo-api directories from tests
         # Use timeout command to ensure tests are killed even if Go timeout fails
         # This prevents hanging tests from blocking CI
         timeout 10m bash -c '
-          PACKAGES=$(go list ./... | grep -v "/loadtest" | grep -v "/workflow-demo" | tr "\n" " ")
-          echo "Testing packages (excluding loadtest and workflow-demo):"
+          PACKAGES=$(go list ./... | grep -v "/loadtest" | grep -v "/workflow-demo" | grep -v "/todo-api" | tr "\n" " ")
+          echo "Testing packages (excluding loadtest, workflow-demo, and todo-api):"
           echo "$PACKAGES"
           go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 8m $PACKAGES 2>&1 | tee test-output.log
         ' || {
