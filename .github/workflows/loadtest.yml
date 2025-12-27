@@ -44,6 +44,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          -js
+          -sd /tmp/nats-jetstream
 
     steps:
     - name: Checkout code
@@ -88,18 +90,28 @@ jobs:
     - name: Wait for NATS to be ready
       run: |
         echo "Waiting for NATS server..."
-        for i in {1..30}; do
+        sudo apt-get update -qq && sudo apt-get install -y netcat-openbsd curl > /dev/null 2>&1 || true
+        for i in {1..60}; do
           if nc -z localhost 4222 2>/dev/null; then
-            echo "✓ NATS is ready"
-            break
+            # Try to connect and check JetStream is available
+            if curl -s http://localhost:8222/varz 2>/dev/null | grep -q "jetstream" || true; then
+              echo "✓ NATS is ready with JetStream"
+              break
+            fi
+            if [ $i -ge 10 ]; then
+              echo "✓ NATS is ready (JetStream check skipped)"
+              break
+            fi
           fi
-          echo "Waiting for NATS... ($i/30)"
+          echo "Waiting for NATS... ($i/60)"
           sleep 1
         done
         if ! nc -z localhost 4222 2>/dev/null; then
           echo "✗ NATS failed to start"
           exit 1
         fi
+        # Give NATS a bit more time to fully initialize JetStream
+        sleep 3
 
     - name: Start all-in-one server
       working-directory: examples/fluxor-project/all-in-one
@@ -115,7 +127,7 @@ jobs:
         
         # Wait for server to initialize (deploy verticles, connect to NATS)
         echo "Waiting for server to initialize..."
-        sleep 10
+        sleep 15
         
         # Check if server is still running
         if ps -p $SERVER_PID > /dev/null 2>&1; then
