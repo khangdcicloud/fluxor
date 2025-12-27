@@ -410,8 +410,13 @@ func TestDeploymentState_ConcurrentDeploy(t *testing.T) {
 		for _, id := range ids {
 			vx.mu.RLock()
 			dep, exists := vx.deployments[id]
+			// Copy state while holding lock to avoid race condition
+			var state DeploymentState
+			if exists {
+				state = dep.state
+			}
 			vx.mu.RUnlock()
-			if !exists || dep.state != DeploymentStateStarted {
+			if !exists || state != DeploymentStateStarted {
 				allStarted = false
 				break
 			}
@@ -428,14 +433,19 @@ func TestDeploymentState_ConcurrentDeploy(t *testing.T) {
 		count++
 		vx.mu.RLock()
 		dep, exists := vx.deployments[id]
+		// Copy state while holding lock to avoid race condition
+		var state DeploymentState
+		if exists {
+			state = dep.state
+		}
 		vx.mu.RUnlock()
 
 		if !exists {
 			t.Errorf("deployment %s should exist", id)
 			continue
 		}
-		if dep.state != DeploymentStateStarted {
-			t.Errorf("deployment %s should be STARTED, got %d", id, dep.state)
+		if state != DeploymentStateStarted {
+			t.Errorf("deployment %s should be STARTED, got %d", id, state)
 		}
 	}
 
