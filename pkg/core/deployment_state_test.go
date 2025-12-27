@@ -483,7 +483,7 @@ func TestDeploymentState_Constants(t *testing.T) {
 func TestDeploymentState_CloseUndeploysAll(t *testing.T) {
 	ctx := context.Background()
 	vx := NewGoCMD(ctx).(*gocmd)
-	defer vx.Close()
+	// Note: Don't use defer here since we call Close() explicitly in the test
 
 	verticles := make([]*testVerticle, 5)
 	for i := 0; i < 5; i++ {

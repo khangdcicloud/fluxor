@@ -47,6 +47,7 @@ type gocmd struct {
 	rootCtx     context.Context    // renamed from 'ctx' for clarity: this is the root context.Context
 	rootCancel  context.CancelFunc // renamed from 'cancel' for clarity
 	logger      Logger
+	closed      bool // tracks if Close() has been called
 }
 
 // GoCMDOptions configures GoCMD construction.
@@ -221,6 +222,12 @@ func (g *gocmd) DeploymentCount() int {
 //     redundant as defense-in-depth since EventBus.ctx is a child of rootCtx)
 func (g *gocmd) Close() error {
 	g.mu.Lock()
+	// Check if already closed to avoid double-close deadlock
+	if g.closed {
+		g.mu.Unlock()
+		return nil
+	}
+	g.closed = true
 	deployments := make([]*deployment, 0, len(g.deployments))
 	for _, dep := range g.deployments {
 		deployments = append(deployments, dep)
@@ -236,28 +243,45 @@ func (g *gocmd) Close() error {
 	time.Sleep(100 * time.Millisecond)
 
 	// Undeploy all verticles (including any that are still PENDING)
+	// Stop all verticles concurrently and wait for completion
+	var stopWg sync.WaitGroup
 	for _, dep := range deployments {
-		// Force undeploy even if PENDING (during shutdown)
-		g.mu.Lock()
-		if dep.state == DeploymentStatePending {
-			// Mark as stopping and remove from map
-			dep.state = DeploymentStateStopping
-			delete(g.deployments, dep.id)
+		stopWg.Add(1)
+		go func(d *deployment, id string) {
+			defer stopWg.Done()
+			// Mark as stopping and remove from map (need lock for this)
+			g.mu.Lock()
+			if d.state == DeploymentStatePending {
+				d.state = DeploymentStateStopping
+			} else if d.state != DeploymentStateStopping && d.state != DeploymentStateStopped {
+				d.state = DeploymentStateStopping
+			}
+			// Only delete if still in map (may have been deleted already)
+			if _, exists := g.deployments[id]; exists {
+				delete(g.deployments, id)
+			}
 			g.mu.Unlock()
 
-			// Stop verticle in goroutine
-			go func(d *deployment, id string) {
-				if err := d.verticle.Stop(d.fluxorCtx); err != nil {
-					g.logger.Error(fmt.Sprintf("verticle stop failed for deployment %s: %v", id, err))
-				}
-			}(dep, dep.id)
-		} else {
-			g.mu.Unlock()
-			if err := g.UndeployVerticle(dep.id); err != nil {
-				// Log error during mass undeploy but continue
-				g.logger.Info(fmt.Sprintf("Failed to undeploy verticle %s during close: %v", dep.id, err))
+			// Stop verticle
+			if err := d.verticle.Stop(d.fluxorCtx); err != nil {
+				g.logger.Error(fmt.Sprintf("verticle stop failed for deployment %s: %v", id, err))
 			}
-		}
+			d.state = DeploymentStateStopped
+		}(dep, dep.id)
+	}
+
+	// Wait for all stop operations to complete with timeout
+	done := make(chan struct{})
+	go func() {
+		stopWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All stops completed
+	case <-time.After(5 * time.Second):
+		// Timeout - log but continue with shutdown
+		g.logger.Info("Some verticles did not stop within timeout during Close()")
 	}
 
 	// Close EventBus (its internal cancel is redundant but kept for defense-in-depth)
