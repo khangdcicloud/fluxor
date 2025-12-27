@@ -24,6 +24,14 @@ func NewWorkerVerticle(id string) *WorkerVerticle {
 	}
 }
 
+// Start overrides BaseVerticle.Start to call doStart
+func (v *WorkerVerticle) Start(ctx core.FluxorContext) error {
+	if err := v.BaseVerticle.Start(ctx); err != nil {
+		return err
+	}
+	return v.doStart(ctx)
+}
+
 // doStart initializes the worker
 func (v *WorkerVerticle) doStart(ctx core.FluxorContext) error {
 	v.logger.Info(fmt.Sprintf("Worker %s starting...", v.id))

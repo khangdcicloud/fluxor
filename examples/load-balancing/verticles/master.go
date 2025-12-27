@@ -35,6 +35,14 @@ func NewMasterVerticle(workerIDs []string) *MasterVerticle {
 	}
 }
 
+// Start overrides BaseVerticle.Start to call doStart
+func (v *MasterVerticle) Start(ctx core.FluxorContext) error {
+	if err := v.BaseVerticle.Start(ctx); err != nil {
+		return err
+	}
+	return v.doStart(ctx)
+}
+
 func (v *MasterVerticle) doStart(ctx core.FluxorContext) error {
 	v.logger.Info("Master starting...")
 
