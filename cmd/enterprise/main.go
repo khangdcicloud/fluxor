@@ -186,7 +186,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 		}
 
 		if err := otel.Initialize(context.Background(), otelConfig); err != nil {
-			logger.Warn("Failed to initialize OpenTelemetry", "error", err)
+			logger.Info("Failed to initialize OpenTelemetry", "error", err)
 		} else {
 			logger.Info("OpenTelemetry tracing enabled", "endpoint", cfg.Observability.JaegerEndpoint)
 		}
@@ -356,7 +356,7 @@ func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfi
 	server.SetHandler(func(ctx *fasthttp.RequestCtx) {
 		reqCtx := &web.FastRequestContext{
 			RequestCtx: ctx,
-			Vertx:      vertx,
+			GoCMD:      vertx,
 			EventBus:   eventBus,
 			Params:     make(map[string]string),
 		}

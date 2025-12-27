@@ -184,7 +184,7 @@ func setupApplication(database *sql.DB, jwtSecret string) func(map[reflect.Type]
 		server.SetHandler(func(ctx *fasthttp.RequestCtx) {
 			reqCtx := &web.FastRequestContext{
 				RequestCtx: ctx,
-				Vertx:      vertx,
+				GoCMD:      vertx,
 				EventBus:   vertx.EventBus(),
 				Params:     make(map[string]string),
 			}

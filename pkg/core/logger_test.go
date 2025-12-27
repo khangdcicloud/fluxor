@@ -29,15 +29,15 @@ func TestNewDefaultLogger(t *testing.T) {
 func TestPackageLevelFunctions(t *testing.T) {
 	// Test package-level Error function
 	Error("package level error")
-	Error("package level error: %s", "formatted") //nolint:govet // intentional format string
+	Error(fmt.Sprintf("package level error: %s", "formatted"))
 
 	// Test package-level Info function
 	Info("package level info")
-	Info("package level info: %s", "formatted") //nolint:govet // intentional format string
+	Info(fmt.Sprintf("package level info: %s", "formatted"))
 
 	// Test package-level Debug function
 	Debug("package level debug")
-	Debug("package level debug: %s", "formatted") //nolint:govet // intentional format string
+	Debug(fmt.Sprintf("package level debug: %s", "formatted"))
 
 	// Test with multiple args (no format specifiers)
 	Info("arg1", "arg2", "arg3")
