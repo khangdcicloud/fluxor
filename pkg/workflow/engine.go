@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,14 @@ type Engine struct {
 	// Execution tracking
 	mergeStates map[string]*mergeState // executionID:nodeID -> merge state
 	mergeMu     sync.Mutex
+
+	// Active node tracking for better completion detection
+	activeNodes map[string]map[string]bool // executionID -> nodeID -> true
+	activeMu    sync.Mutex
+
+	// Context cancellation for executions
+	execContexts map[string]context.CancelFunc // executionID -> cancel function
+	execCtxMu    sync.Mutex
 }
 
 type mergeState struct {
@@ -34,12 +43,14 @@ type mergeState struct {
 // NewEngine creates a new workflow engine.
 func NewEngine(eventBus core.EventBus) *Engine {
 	return &Engine{
-		eventBus:    eventBus,
-		registry:    NewNodeRegistry(),
-		workflows:   make(map[string]*WorkflowDefinition),
-		executions:  make(map[string]*ExecutionState),
-		mergeStates: make(map[string]*mergeState),
-		logger:      core.NewDefaultLogger(),
+		eventBus:     eventBus,
+		registry:     NewNodeRegistry(),
+		workflows:    make(map[string]*WorkflowDefinition),
+		executions:   make(map[string]*ExecutionState),
+		mergeStates:  make(map[string]*mergeState),
+		activeNodes:  make(map[string]map[string]bool),
+		execContexts: make(map[string]context.CancelFunc),
+		logger:       core.NewDefaultLogger(),
 	}
 }
 
@@ -142,7 +153,15 @@ func (e *Engine) startExecution(ctx context.Context, workflowID string, input in
 	}
 
 	executionID := uuid.New().String()
-	execCtx := &ExecutionContext{
+	
+	// Create cancellable context for this execution
+	execCtx, cancel := context.WithCancel(ctx)
+	
+	e.execCtxMu.Lock()
+	e.execContexts[executionID] = cancel
+	e.execCtxMu.Unlock()
+
+	execCtxData := &ExecutionContext{
 		WorkflowID:  workflowID,
 		ExecutionID: executionID,
 		StartTime:   time.Now(),
@@ -153,9 +172,9 @@ func (e *Engine) startExecution(ctx context.Context, workflowID string, input in
 
 	// Store input
 	if inputMap, ok := input.(map[string]interface{}); ok {
-		execCtx.Data = inputMap
+		execCtxData.Data = inputMap
 	} else {
-		execCtx.Data["input"] = input
+		execCtxData.Data["input"] = input
 	}
 
 	state := &ExecutionState{
@@ -163,17 +182,23 @@ func (e *Engine) startExecution(ctx context.Context, workflowID string, input in
 		WorkflowID:  workflowID,
 		Status:      ExecutionStatusRunning,
 		StartTime:   time.Now(),
-		Context:     execCtx,
+		Context:     execCtxData,
 	}
 
 	e.mu.Lock()
 	e.executions[executionID] = state
 	e.mu.Unlock()
 
+	// Initialize active nodes tracking
+	e.activeMu.Lock()
+	e.activeNodes[executionID] = make(map[string]bool)
+	e.activeMu.Unlock()
+
 	// Find and execute trigger/start nodes
 	for _, node := range def.Nodes {
 		if e.isStartNode(&node, def) {
-			go e.executeNode(ctx, def, &node, execCtx, input)
+			e.markNodeActive(executionID, node.ID)
+			go e.executeNode(execCtx, def, &node, execCtxData, input)
 		}
 	}
 
@@ -210,11 +235,20 @@ func (e *Engine) isStartNode(node *NodeDefinition, def *WorkflowDefinition) bool
 }
 
 func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node *NodeDefinition, execCtx *ExecutionContext, input interface{}) {
+	// Check if execution was cancelled
+	select {
+	case <-ctx.Done():
+		e.markNodeInactive(execCtx.ExecutionID, node.ID)
+		return
+	default:
+	}
+
 	nodeType := NodeType(node.Type)
 	handler, ok := e.registry.Get(nodeType)
 	if !ok {
 		e.logger.Error(fmt.Sprintf("unknown node type: %s", node.Type))
 		e.recordError(execCtx, node.ID, fmt.Sprintf("unknown node type: %s", node.Type))
+		e.markNodeInactive(execCtx.ExecutionID, node.ID)
 		return
 	}
 
@@ -245,14 +279,32 @@ func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node 
 	}
 
 	for i := 0; i < retries; i++ {
+		// Check cancellation before each retry
+		select {
+		case <-ctx.Done():
+			e.markNodeInactive(execCtx.ExecutionID, node.ID)
+			return
+		default:
+		}
+
 		output, err = handler(nodeCtx, nodeInput)
 		if err == nil {
 			break
 		}
 		if i < retries-1 {
-			time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+			// Exponential backoff with jitter
+			backoff := time.Duration(i+1) * time.Second
+			select {
+			case <-ctx.Done():
+				e.markNodeInactive(execCtx.ExecutionID, node.ID)
+				return
+			case <-time.After(backoff):
+			}
 		}
 	}
+
+	// Mark node as completed
+	defer e.markNodeInactive(execCtx.ExecutionID, node.ID)
 
 	// Handle error
 	if err != nil {
@@ -261,9 +313,13 @@ func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node 
 			for _, nextID := range node.OnError {
 				nextNode := e.findNode(def, nextID)
 				if nextNode != nil {
+					e.markNodeActive(execCtx.ExecutionID, nextID)
 					go e.executeNode(ctx, def, nextNode, execCtx, input)
 				}
 			}
+		} else {
+			// No error handler - check if execution should complete
+			e.checkExecutionComplete(execCtx.ExecutionID)
 		}
 		return
 	}
@@ -284,12 +340,20 @@ func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node 
 
 	// Execute next nodes
 	for _, nextID := range nextNodes {
+		// Check cancellation
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		nextNode := e.findNode(def, nextID)
 		if nextNode != nil {
 			// Handle merge nodes
 			if NodeType(nextNode.Type) == NodeTypeMerge {
 				e.handleMergeInput(ctx, def, nextNode, execCtx, output.Data)
 			} else {
+				e.markNodeActive(execCtx.ExecutionID, nextID)
 				go e.executeNode(ctx, def, nextNode, execCtx, output.Data)
 			}
 		}
@@ -426,10 +490,9 @@ func (e *Engine) recordError(execCtx *ExecutionContext, nodeID, message string) 
 
 func (e *Engine) completeExecution(executionID string, err error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	state, ok := e.executions[executionID]
 	if !ok {
+		e.mu.Unlock()
 		return
 	}
 
@@ -442,10 +505,28 @@ func (e *Engine) completeExecution(executionID string, err error) {
 	} else {
 		state.Status = ExecutionStatusCompleted
 	}
+	e.mu.Unlock()
+
+	// Clean up execution resources
+	e.execCtxMu.Lock()
+	delete(e.execContexts, executionID)
+	e.execCtxMu.Unlock()
+
+	e.activeMu.Lock()
+	delete(e.activeNodes, executionID)
+	e.activeMu.Unlock()
+
+	// Clean up merge states for this execution
+	e.mergeMu.Lock()
+	for key := range e.mergeStates {
+		if strings.HasPrefix(key, executionID+":") {
+			delete(e.mergeStates, key)
+		}
+	}
+	e.mergeMu.Unlock()
 }
 
 func (e *Engine) checkExecutionComplete(executionID string) {
-	// Simple completion check - can be enhanced with more sophisticated tracking
 	e.mu.RLock()
 	state, ok := e.executions[executionID]
 	e.mu.RUnlock()
@@ -454,12 +535,42 @@ func (e *Engine) checkExecutionComplete(executionID string) {
 		return
 	}
 
-	// For now, mark as completed if no errors
-	if len(state.Context.Errors) == 0 {
-		e.completeExecution(executionID, nil)
-	} else {
-		e.completeExecution(executionID, fmt.Errorf("workflow had %d errors", len(state.Context.Errors)))
+	// Check if there are any active nodes
+	e.activeMu.Lock()
+	activeNodes := e.activeNodes[executionID]
+	hasActiveNodes := len(activeNodes) > 0
+	e.activeMu.Unlock()
+
+	// Only complete if no active nodes remain
+	if !hasActiveNodes {
+		if len(state.Context.Errors) == 0 {
+			e.completeExecution(executionID, nil)
+		} else {
+			e.completeExecution(executionID, fmt.Errorf("workflow had %d errors", len(state.Context.Errors)))
+		}
 	}
+}
+
+// markNodeActive marks a node as active in an execution.
+func (e *Engine) markNodeActive(executionID, nodeID string) {
+	e.activeMu.Lock()
+	defer e.activeMu.Unlock()
+	if e.activeNodes[executionID] == nil {
+		e.activeNodes[executionID] = make(map[string]bool)
+	}
+	e.activeNodes[executionID][nodeID] = true
+}
+
+// markNodeInactive marks a node as inactive and checks completion.
+func (e *Engine) markNodeInactive(executionID, nodeID string) {
+	e.activeMu.Lock()
+	if nodes, ok := e.activeNodes[executionID]; ok {
+		delete(nodes, nodeID)
+	}
+	e.activeMu.Unlock()
+
+	// Check completion after marking inactive
+	e.checkExecutionComplete(executionID)
 }
 
 // GetExecution returns execution status.
@@ -478,20 +589,44 @@ func (e *Engine) GetExecution(executionID string) (*ExecutionContext, error) {
 // CancelExecution cancels a running execution.
 func (e *Engine) CancelExecution(executionID string) error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	state, ok := e.executions[executionID]
 	if !ok {
+		e.mu.Unlock()
 		return fmt.Errorf("execution not found: %s", executionID)
 	}
 
 	if state.Status != ExecutionStatusRunning {
+		e.mu.Unlock()
 		return fmt.Errorf("execution is not running")
 	}
 
 	now := time.Now()
 	state.EndTime = &now
 	state.Status = ExecutionStatusCancelled
+	e.mu.Unlock()
+
+	// Cancel the execution context to stop all running nodes
+	e.execCtxMu.Lock()
+	cancel, ok := e.execContexts[executionID]
+	if ok {
+		cancel()
+		delete(e.execContexts, executionID)
+	}
+	e.execCtxMu.Unlock()
+
+	// Clean up active nodes tracking
+	e.activeMu.Lock()
+	delete(e.activeNodes, executionID)
+	e.activeMu.Unlock()
+
+	// Clean up merge states
+	e.mergeMu.Lock()
+	for key := range e.mergeStates {
+		if strings.HasPrefix(key, executionID+":") {
+			delete(e.mergeStates, key)
+		}
+	}
+	e.mergeMu.Unlock()
 
 	return nil
 }
@@ -519,4 +654,44 @@ func (e *Engine) GetExecutionState(executionID string) (*ExecutionState, error) 
 	}
 
 	return state, nil
+}
+
+// CleanupOldExecutions removes executions older than the specified duration.
+// This helps prevent memory leaks from long-running workflows.
+func (e *Engine) CleanupOldExecutions(maxAge time.Duration) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	now := time.Now()
+	cleaned := 0
+
+	for execID, state := range e.executions {
+		// Only clean up completed/failed/cancelled executions
+		if state.Status != ExecutionStatusRunning && state.Status != ExecutionStatusPending {
+			if state.EndTime != nil && now.Sub(*state.EndTime) > maxAge {
+				delete(e.executions, execID)
+				cleaned++
+
+				// Clean up related resources
+				e.execCtxMu.Lock()
+				delete(e.execContexts, execID)
+				e.execCtxMu.Unlock()
+
+				e.activeMu.Lock()
+				delete(e.activeNodes, execID)
+				e.activeMu.Unlock()
+
+				// Clean up merge states
+				e.mergeMu.Lock()
+				for key := range e.mergeStates {
+					if strings.HasPrefix(key, execID+":") {
+						delete(e.mergeStates, key)
+					}
+				}
+				e.mergeMu.Unlock()
+			}
+		}
+	}
+
+	return cleaned
 }

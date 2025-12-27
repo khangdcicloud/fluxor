@@ -3,11 +3,13 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 // FunctionRegistry stores custom functions that can be called by function nodes.
 type FunctionRegistry struct {
 	functions map[string]func(ctx context.Context, data interface{}) (interface{}, error)
+	mu        sync.RWMutex
 }
 
 // NewFunctionRegistry creates a new function registry.
@@ -19,11 +21,21 @@ func NewFunctionRegistry() *FunctionRegistry {
 
 // Register registers a function with a name.
 func (r *FunctionRegistry) Register(name string, fn func(ctx context.Context, data interface{}) (interface{}, error)) {
+	if name == "" {
+		panic("function name cannot be empty")
+	}
+	if fn == nil {
+		panic("function cannot be nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.functions[name] = fn
 }
 
 // Get returns a function by name.
 func (r *FunctionRegistry) Get(name string) (func(ctx context.Context, data interface{}) (interface{}, error), bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	fn, ok := r.functions[name]
 	return fn, ok
 }

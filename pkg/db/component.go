@@ -40,15 +40,15 @@ func NewDatabaseComponent(config PoolConfig) *DatabaseComponent {
 func (c *DatabaseComponent) doStart(ctx core.FluxorContext) error {
 	// Fail-fast: Validate context
 	if ctx == nil {
-		return &core.Error{Code: "INVALID_INPUT", Message: "FluxorContext cannot be nil"}
+		return &core.EventBusError{Code: "INVALID_INPUT", Message: "FluxorContext cannot be nil"}
 	}
 
 	// Fail-fast: Validate configuration (should have been validated in NewDatabaseComponent)
 	if c.config.DSN == "" {
-		return &core.Error{Code: "INVALID_CONFIG", Message: "DSN cannot be empty"}
+		return &core.EventBusError{Code: "INVALID_CONFIG", Message: "DSN cannot be empty"}
 	}
 	if c.config.DriverName == "" {
-		return &core.Error{Code: "INVALID_CONFIG", Message: "DriverName cannot be empty"}
+		return &core.EventBusError{Code: "INVALID_CONFIG", Message: "DriverName cannot be empty"}
 	}
 
 	// Create connection pool (NewPool also validates config)
@@ -110,16 +110,16 @@ func (c *DatabaseComponent) DB() *sql.DB {
 // Fail-fast: Validates state and inputs before querying
 func (c *DatabaseComponent) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if c == nil {
-		return nil, &core.Error{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
 	}
 	if c.pool == nil {
-		return nil, &core.Error{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
+		return nil, &core.EventBusError{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
 	}
 	if ctx == nil {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "context cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "context cannot be nil"}
 	}
 	if query == "" {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "query cannot be empty"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "query cannot be empty"}
 	}
 	return c.pool.Query(ctx, query, args...)
 }
@@ -146,16 +146,16 @@ func (c *DatabaseComponent) QueryRow(ctx context.Context, query string, args ...
 // Fail-fast: Validates state and inputs before executing
 func (c *DatabaseComponent) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if c == nil {
-		return nil, &core.Error{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
 	}
 	if c.pool == nil {
-		return nil, &core.Error{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
+		return nil, &core.EventBusError{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
 	}
 	if ctx == nil {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "context cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "context cannot be nil"}
 	}
 	if query == "" {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "query cannot be empty"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "query cannot be empty"}
 	}
 	return c.pool.Exec(ctx, query, args...)
 }
@@ -164,13 +164,13 @@ func (c *DatabaseComponent) Exec(ctx context.Context, query string, args ...inte
 // Fail-fast: Validates state and inputs before beginning transaction
 func (c *DatabaseComponent) Begin(ctx context.Context) (*sql.Tx, error) {
 	if c == nil {
-		return nil, &core.Error{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
 	}
 	if c.pool == nil {
-		return nil, &core.Error{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
+		return nil, &core.EventBusError{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
 	}
 	if ctx == nil {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "context cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "context cannot be nil"}
 	}
 	return c.pool.Begin(ctx)
 }
@@ -179,13 +179,13 @@ func (c *DatabaseComponent) Begin(ctx context.Context) (*sql.Tx, error) {
 // Fail-fast: Validates state and inputs before beginning transaction
 func (c *DatabaseComponent) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
 	if c == nil {
-		return nil, &core.Error{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
 	}
 	if c.pool == nil {
-		return nil, &core.Error{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
+		return nil, &core.EventBusError{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
 	}
 	if ctx == nil {
-		return nil, &core.Error{Code: "INVALID_INPUT", Message: "context cannot be nil"}
+		return nil, &core.EventBusError{Code: "INVALID_INPUT", Message: "context cannot be nil"}
 	}
 	return c.pool.BeginTx(ctx, opts)
 }
@@ -203,13 +203,13 @@ func (c *DatabaseComponent) Stats() sql.DBStats {
 // Fail-fast: Validates state and inputs before pinging
 func (c *DatabaseComponent) Ping(ctx context.Context) error {
 	if c == nil {
-		return &core.Error{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
+		return &core.EventBusError{Code: "INVALID_STATE", Message: "DatabaseComponent cannot be nil"}
 	}
 	if c.pool == nil {
-		return &core.Error{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
+		return &core.EventBusError{Code: "NOT_STARTED", Message: "database component not started - call Start() first"}
 	}
 	if ctx == nil {
-		return &core.Error{Code: "INVALID_INPUT", Message: "context cannot be nil"}
+		return &core.EventBusError{Code: "INVALID_INPUT", Message: "context cannot be nil"}
 	}
 	return c.pool.Ping(ctx)
 }
