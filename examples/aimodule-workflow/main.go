@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/fluxorio/fluxor/pkg/core"
 	"github.com/fluxorio/fluxor/pkg/fluxor"
 	"github.com/fluxorio/fluxor/pkg/workflow"
 )
@@ -88,4 +87,3 @@ func createCustomerSupportWorkflow() *workflow.WorkflowDefinition {
 
 	return &def
 }
-
