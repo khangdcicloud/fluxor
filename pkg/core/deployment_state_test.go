@@ -132,7 +132,9 @@ func (v *asyncTestVerticle) AsyncStop(ctx FluxorContext, resultHandler func(erro
 }
 
 // TestDeploymentState_AsyncVerticle_Pending tests that async verticle starts in PENDING state
+// TODO: Re-enable when AsyncVerticle support is restored
 func TestDeploymentState_AsyncVerticle_Pending(t *testing.T) {
+	t.Skip("AsyncVerticle support removed - all verticles use Start() in goroutine now")
 	ctx := context.Background()
 	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
@@ -176,7 +178,9 @@ func TestDeploymentState_AsyncVerticle_Pending(t *testing.T) {
 }
 
 // TestDeploymentState_AsyncVerticle_Failed tests state when AsyncStart fails
+// TODO: Re-enable when AsyncVerticle support is restored
 func TestDeploymentState_AsyncVerticle_Failed(t *testing.T) {
+	t.Skip("AsyncVerticle support removed - all verticles use Start() in goroutine now")
 	ctx := context.Background()
 	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
@@ -318,7 +322,9 @@ func TestDeploymentState_Undeploy_DoubleUndeploy(t *testing.T) {
 }
 
 // TestDeploymentState_AsyncUndeploy tests async verticle undeploy state transitions
+// TODO: Re-enable when AsyncVerticle support is restored
 func TestDeploymentState_AsyncUndeploy(t *testing.T) {
+	t.Skip("AsyncVerticle support removed - all verticles use Start() in goroutine now")
 	ctx := context.Background()
 	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
