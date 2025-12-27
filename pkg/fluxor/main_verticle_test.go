@@ -13,7 +13,7 @@ type cfgCheckVerticle struct{}
 
 func (v *cfgCheckVerticle) Start(ctx core.FluxorContext) error {
 	if got := ctx.Config()["foo"]; got != "bar" {
-		return &core.Error{Code: "CONFIG_MISSING", Message: "expected foo=bar in context config"}
+		return &core.EventBusError{Code: "CONFIG_MISSING", Message: "expected foo=bar in context config"}
 	}
 	return nil
 }
@@ -57,7 +57,7 @@ func TestMainVerticle_DeployVerticle_FailFast_NilVerticle(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for nil verticle")
 	}
-	if ce, ok := err.(*core.Error); ok {
+	if ce, ok := err.(*core.EventBusError); ok {
 		if ce.Code != "INVALID_INPUT" {
 			t.Fatalf("error code = %q, want %q", ce.Code, "INVALID_INPUT")
 		}
@@ -67,7 +67,7 @@ func TestMainVerticle_DeployVerticle_FailFast_NilVerticle(t *testing.T) {
 func TestNewMainVerticleWithOptions_FailFast_EventBusFactoryError(t *testing.T) {
 	_, err := NewMainVerticleWithOptions("", MainVerticleOptions{
 		EventBusFactory: func(ctx context.Context, gocmd core.GoCMD, cfg map[string]any) (core.EventBus, error) {
-			return nil, &core.Error{Code: "TEST", Message: "boom"}
+			return nil, &core.EventBusError{Code: "TEST", Message: "boom"}
 		},
 	})
 	if err == nil {

@@ -48,10 +48,8 @@ func (r *ReactorRuntime) Deploy(reactor Reactor, config map[string]any) string {
 
 	// Create FluxorContext using gocmd
 	fctx := newFluxorContext(r.ctx, r.gocmd)
-	if config != nil {
-		for k, v := range config {
-			fctx.SetConfig(k, v)
-		}
+	for k, v := range config {
+		fctx.SetConfig(k, v)
 	}
 
 	r.mu.Lock()
