@@ -52,4 +52,3 @@ func TestHTTPHealthCheck(t *testing.T) {
 		t.Error("HTTPCheck should return a checker function")
 	}
 }
-

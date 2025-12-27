@@ -30,10 +30,10 @@ func (v *WorkerVerticle) doStart(ctx core.FluxorContext) error {
 
 	// Register consumer with a unique address (for direct addressing if needed)
 	// AND a shared group address if we wanted queue-group style LB (but we are doing manual LB here)
-	
+
 	// For manual LB from Master, we listen on our specific address
 	myAddress := fmt.Sprintf("%s.%s", contracts.WorkerAddress, v.id)
-	
+
 	v.Consumer(myAddress).Handler(func(c core.FluxorContext, msg core.Message) error {
 		var req contracts.WorkRequest
 		if err := msg.DecodeBody(&req); err != nil {

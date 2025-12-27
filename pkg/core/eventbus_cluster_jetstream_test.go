@@ -178,7 +178,7 @@ func TestNewClusterEventBusJetStream_FailFast_InvalidInputs(t *testing.T) {
 		}
 	})
 
-		t.Run("nil gocmd", func(t *testing.T) {
+	t.Run("nil gocmd", func(t *testing.T) {
 		if _, err := NewClusterEventBusJetStream(context.Background(), nil, ClusterJetStreamConfig{
 			URL:     url,
 			Prefix:  "fluxor.js.failfast",

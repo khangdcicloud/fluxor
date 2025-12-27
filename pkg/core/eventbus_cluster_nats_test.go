@@ -173,7 +173,7 @@ func TestNewClusterEventBusNATS_FailFast_InvalidInputs(t *testing.T) {
 		}
 	})
 
-		t.Run("nil gocmd", func(t *testing.T) {
+	t.Run("nil gocmd", func(t *testing.T) {
 		if _, err := NewClusterEventBusNATS(context.Background(), nil, ClusterNATSConfig{URL: url}); err == nil {
 			t.Fatalf("expected error for nil gocmd")
 		}

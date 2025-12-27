@@ -54,4 +54,3 @@ func TestTimeoutMiddleware(t *testing.T) {
 		t.Error("Timeout should return middleware")
 	}
 }
-

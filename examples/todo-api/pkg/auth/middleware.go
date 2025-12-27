@@ -28,7 +28,7 @@ func AuthMiddleware() web.FastMiddleware {
 
 			// Store user ID in params for handlers to access
 			ctx.Params["user_id"] = fmt.Sprintf("%d", claims.UserID)
-			
+
 			return next(ctx)
 		}
 	}

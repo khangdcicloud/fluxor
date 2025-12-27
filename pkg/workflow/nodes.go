@@ -39,7 +39,7 @@ func conditionHandler(ctx context.Context, input *NodeInput) (*NodeOutput, error
 	// - "field": field to check
 	// - "operator": eq, ne, gt, lt, gte, lte, contains, exists
 	// - "value": value to compare against
-	
+
 	field, _ := input.Config["field"].(string)
 	operator, _ := input.Config["operator"].(string)
 	expectedValue := input.Config["value"]
@@ -116,7 +116,7 @@ func contains(actual, expected interface{}) bool {
 	switch a := actual.(type) {
 	case string:
 		if e, ok := expected.(string); ok {
-			return len(a) > 0 && len(e) > 0 && 
+			return len(a) > 0 && len(e) > 0 &&
 				(a == e || len(a) > len(e) && (a[:len(e)] == e || a[len(a)-len(e):] == e))
 		}
 	case []interface{}:
@@ -226,7 +226,7 @@ func mergeHandler(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	// Config:
 	// - "mode": "waitAll" (default), "waitAny", "append"
 	// - "expectedInputs": number of inputs to wait for
-	
+
 	mode, _ := input.Config["mode"].(string)
 	if mode == "" {
 		mode = "waitAll"
@@ -248,7 +248,7 @@ func switchHandler(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	// - "field": field to switch on
 	// - "cases": map of value -> next node IDs
 	// - "default": default next node IDs
-	
+
 	field, _ := input.Config["field"].(string)
 	cases, _ := input.Config["cases"].(map[string]interface{})
 	defaultNext, _ := input.Config["default"].([]interface{})
@@ -259,7 +259,7 @@ func switchHandler(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	}
 
 	valueStr := fmt.Sprintf("%v", value)
-	
+
 	var nextNodes []string
 	if caseNext, ok := cases[valueStr]; ok {
 		if arr, ok := caseNext.([]interface{}); ok {

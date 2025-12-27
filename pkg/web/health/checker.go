@@ -148,4 +148,3 @@ func Unregister(name string) {
 func Check(ctx context.Context) map[string]CheckResult {
 	return globalRegistry.Check(ctx)
 }
-

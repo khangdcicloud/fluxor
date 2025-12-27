@@ -11,11 +11,11 @@ import (
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	
+
 	handler := func(ctx *fasthttp.RequestCtx) {
 		path := string(ctx.Path())
 		ctx.SetContentType("application/json")
-		
+
 		switch path {
 		case "/health":
 			json.NewEncoder(ctx).Encode(map[string]interface{}{"status": "ok"})

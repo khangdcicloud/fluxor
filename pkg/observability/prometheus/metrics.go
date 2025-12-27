@@ -23,37 +23,37 @@ var (
 // Metrics holds all Prometheus metrics
 type Metrics struct {
 	// HTTP request metrics
-	HTTPRequestsTotal    *prometheus.CounterVec
-	HTTPRequestDuration  *prometheus.HistogramVec
-	HTTPRequestSize      *prometheus.HistogramVec
-	HTTPResponseSize     *prometheus.HistogramVec
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPRequestSize     *prometheus.HistogramVec
+	HTTPResponseSize    *prometheus.HistogramVec
 
 	// EventBus metrics
 	EventBusMessagesTotal   *prometheus.CounterVec
 	EventBusMessageDuration *prometheus.HistogramVec
 
 	// Database pool metrics
-	DatabaseConnectionsOpen    prometheus.Gauge
-	DatabaseConnectionsIdle     prometheus.Gauge
-	DatabaseConnectionsInUse    prometheus.Gauge
-	DatabaseConnectionsWait     prometheus.Counter
-	DatabaseQueryDuration       *prometheus.HistogramVec
+	DatabaseConnectionsOpen  prometheus.Gauge
+	DatabaseConnectionsIdle  prometheus.Gauge
+	DatabaseConnectionsInUse prometheus.Gauge
+	DatabaseConnectionsWait  prometheus.Counter
+	DatabaseQueryDuration    *prometheus.HistogramVec
 
 	// Server metrics
-	ServerQueuedRequests        prometheus.Gauge
-	ServerRejectedRequests      prometheus.Counter
-	ServerCurrentCCU            prometheus.Gauge
-	ServerNormalCCU             prometheus.Gauge
-	ServerCCUUtilization        prometheus.Gauge
+	ServerQueuedRequests          prometheus.Gauge
+	ServerRejectedRequests        prometheus.Counter
+	ServerCurrentCCU              prometheus.Gauge
+	ServerNormalCCU               prometheus.Gauge
+	ServerCCUUtilization          prometheus.Gauge
 	ServerBackpressureQueueLength prometheus.Gauge
-	ServerVerticleCount         prometheus.Gauge
+	ServerVerticleCount           prometheus.Gauge
 
 	// Verticle metrics
 	VerticleCount prometheus.Gauge
 
 	// Custom metrics registry
 	CustomCounters   map[string]*prometheus.CounterVec
-	CustomGauges    map[string]*prometheus.GaugeVec
+	CustomGauges     map[string]*prometheus.GaugeVec
 	CustomHistograms map[string]*prometheus.HistogramVec
 	customMu         sync.RWMutex
 }
@@ -212,7 +212,7 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 		// Custom metrics
 		CustomCounters:   make(map[string]*prometheus.CounterVec),
 		CustomGauges:     make(map[string]*prometheus.GaugeVec),
-		CustomHistograms:  make(map[string]*prometheus.HistogramVec),
+		CustomHistograms: make(map[string]*prometheus.HistogramVec),
 	}
 
 	return m

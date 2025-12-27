@@ -52,17 +52,17 @@ type NodeType string
 
 const (
 	// Trigger nodes - start the workflow
-	NodeTypeWebhook   NodeType = "webhook"   // HTTP webhook trigger
-	NodeTypeSchedule  NodeType = "schedule"  // Cron/interval trigger
-	NodeTypeEvent     NodeType = "event"     // EventBus trigger
-	NodeTypeManual    NodeType = "manual"    // Manual trigger
+	NodeTypeWebhook  NodeType = "webhook"  // HTTP webhook trigger
+	NodeTypeSchedule NodeType = "schedule" // Cron/interval trigger
+	NodeTypeEvent    NodeType = "event"    // EventBus trigger
+	NodeTypeManual   NodeType = "manual"   // Manual trigger
 
 	// Action nodes - perform operations
-	NodeTypeFunction  NodeType = "function"  // Custom function
-	NodeTypeHTTP      NodeType = "http"      // HTTP request
-	NodeTypeEventBus  NodeType = "eventbus"  // Send to EventBus
-	NodeTypeSet       NodeType = "set"       // Set variables
-	NodeTypeCode      NodeType = "code"      // Execute code
+	NodeTypeFunction NodeType = "function" // Custom function
+	NodeTypeHTTP     NodeType = "http"     // HTTP request
+	NodeTypeEventBus NodeType = "eventbus" // Send to EventBus
+	NodeTypeSet      NodeType = "set"      // Set variables
+	NodeTypeCode     NodeType = "code"     // Execute code
 
 	// Flow control nodes
 	NodeTypeCondition NodeType = "condition" // If/else branching
@@ -73,9 +73,9 @@ const (
 	NodeTypeWait      NodeType = "wait"      // Delay execution
 
 	// Utility nodes
-	NodeTypeNoOp      NodeType = "noop"      // Pass-through
-	NodeTypeError     NodeType = "error"     // Throw error
-	NodeTypeRespond   NodeType = "respond"   // Respond to trigger
+	NodeTypeNoOp    NodeType = "noop"    // Pass-through
+	NodeTypeError   NodeType = "error"   // Throw error
+	NodeTypeRespond NodeType = "respond" // Respond to trigger
 )
 
 // ExecutionContext holds the context for a workflow execution.
@@ -153,11 +153,11 @@ const (
 
 // ExecutionState tracks the state of a workflow execution.
 type ExecutionState struct {
-	ExecutionID string           `json:"executionId"`
-	WorkflowID  string           `json:"workflowId"`
-	Status      ExecutionStatus  `json:"status"`
-	StartTime   time.Time        `json:"startTime"`
-	EndTime     *time.Time       `json:"endTime,omitempty"`
+	ExecutionID string            `json:"executionId"`
+	WorkflowID  string            `json:"workflowId"`
+	Status      ExecutionStatus   `json:"status"`
+	StartTime   time.Time         `json:"startTime"`
+	EndTime     *time.Time        `json:"endTime,omitempty"`
 	Context     *ExecutionContext `json:"context"`
-	Error       string           `json:"error,omitempty"`
+	Error       string            `json:"error,omitempty"`
 }

@@ -16,10 +16,10 @@ type TodoHandler struct {
 func (h *TodoHandler) RegisterRoutes(router *web.FastRouter) {
 	// Protected routes
 	authMw := auth.AuthMiddleware()
-	
+
 	// Create middleware chain manually since fast router is simple
 	// In a real app we'd have Router.Group()
-	
+
 	router.POSTFast("/api/todos", h.protect(authMw, h.Create))
 	router.GETFast("/api/todos", h.protect(authMw, h.List))
 	router.GETFast("/api/todos/:id", h.protect(authMw, h.Get))
@@ -34,7 +34,7 @@ func (h *TodoHandler) protect(mw web.FastMiddleware, handler web.FastRequestHand
 
 func (h *TodoHandler) Create(ctx *web.FastRequestContext) error {
 	userID, _ := strconv.Atoi(ctx.Params["user_id"])
-	
+
 	var req struct {
 		Title string `json:"title"`
 	}
@@ -90,7 +90,7 @@ func (h *TodoHandler) Get(ctx *web.FastRequestContext) error {
 
 	var res map[string]interface{}
 	reply.DecodeBody(&res)
-	
+
 	if _, ok := res["error"]; ok {
 		return ctx.JSON(404, res)
 	}

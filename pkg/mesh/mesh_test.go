@@ -99,7 +99,7 @@ func TestCircuitBreaker(t *testing.T) {
 	if err == nil {
 		t.Error("Expected failure")
 	}
-	
+
 	// Should be open again
 	if cb.state != StateOpen {
 		t.Errorf("Expected StateOpen, got %v", cb.state)

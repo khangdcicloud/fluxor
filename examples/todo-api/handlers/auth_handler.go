@@ -30,7 +30,7 @@ func (h *AuthHandler) Register(ctx *web.FastRequestContext) error {
 	var req models.CreateUserRequest
 	if err := ctx.BindJSON(&req); err != nil {
 		return ctx.JSON(400, map[string]interface{}{
-			"error": "invalid_request",
+			"error":   "invalid_request",
 			"message": "Invalid JSON",
 		})
 	}
@@ -38,7 +38,7 @@ func (h *AuthHandler) Register(ctx *web.FastRequestContext) error {
 	// Validate input
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return ctx.JSON(400, map[string]interface{}{
-			"error": "invalid_request",
+			"error":   "invalid_request",
 			"message": "Username, email, and password are required",
 		})
 	}
@@ -47,7 +47,7 @@ func (h *AuthHandler) Register(ctx *web.FastRequestContext) error {
 	user, err := h.userService.CreateUser(ctx.Context(), req)
 	if err != nil {
 		return ctx.JSON(400, map[string]interface{}{
-			"error": "user_creation_failed",
+			"error":   "user_creation_failed",
 			"message": err.Error(),
 		})
 	}
@@ -67,7 +67,7 @@ func (h *AuthHandler) Login(ctx *web.FastRequestContext) error {
 	var req models.LoginRequest
 	if err := ctx.BindJSON(&req); err != nil {
 		return ctx.JSON(400, map[string]interface{}{
-			"error": "invalid_request",
+			"error":   "invalid_request",
 			"message": "Invalid JSON",
 		})
 	}
@@ -76,7 +76,7 @@ func (h *AuthHandler) Login(ctx *web.FastRequestContext) error {
 	user, err := h.userService.GetUserByUsername(ctx.Context(), req.Username)
 	if err != nil {
 		return ctx.JSON(401, map[string]interface{}{
-			"error": "authentication_failed",
+			"error":   "authentication_failed",
 			"message": "Invalid username or password",
 		})
 	}
@@ -84,7 +84,7 @@ func (h *AuthHandler) Login(ctx *web.FastRequestContext) error {
 	// Verify password
 	if !h.userService.VerifyPassword(user.PasswordHash, req.Password) {
 		return ctx.JSON(401, map[string]interface{}{
-			"error": "authentication_failed",
+			"error":   "authentication_failed",
 			"message": "Invalid username or password",
 		})
 	}
@@ -93,7 +93,7 @@ func (h *AuthHandler) Login(ctx *web.FastRequestContext) error {
 	token, err := h.generateToken(user.ID, user.Username)
 	if err != nil {
 		return ctx.JSON(500, map[string]interface{}{
-			"error": "token_generation_failed",
+			"error":   "token_generation_failed",
 			"message": "Failed to generate token",
 		})
 	}
@@ -101,9 +101,9 @@ func (h *AuthHandler) Login(ctx *web.FastRequestContext) error {
 	return ctx.JSON(200, models.LoginResponse{
 		Token: token,
 		User: models.User{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
 		},
@@ -129,7 +129,7 @@ func (h *AuthHandler) GetProfile(ctx *web.FastRequestContext) error {
 	userIDStr, err := auth.GetUserID(ctx, "user")
 	if err != nil {
 		return ctx.JSON(401, map[string]interface{}{
-			"error": "unauthorized",
+			"error":   "unauthorized",
 			"message": "User not authenticated",
 		})
 	}
@@ -137,7 +137,7 @@ func (h *AuthHandler) GetProfile(ctx *web.FastRequestContext) error {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		return ctx.JSON(400, map[string]interface{}{
-			"error": "invalid_user_id",
+			"error":   "invalid_user_id",
 			"message": "Invalid user ID",
 		})
 	}
@@ -145,15 +145,15 @@ func (h *AuthHandler) GetProfile(ctx *web.FastRequestContext) error {
 	user, err := h.userService.GetUserByID(ctx.Context(), userID)
 	if err != nil {
 		return ctx.JSON(404, map[string]interface{}{
-			"error": "user_not_found",
+			"error":   "user_not_found",
 			"message": "User not found",
 		})
 	}
 
 	return ctx.JSON(200, map[string]interface{}{
-		"id":        user.ID,
-		"username":  user.Username,
-		"email":     user.Email,
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
 	})

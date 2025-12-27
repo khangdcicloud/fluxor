@@ -115,4 +115,3 @@ func CORS(config CORSConfig) web.FastMiddleware {
 		}
 	}
 }
-

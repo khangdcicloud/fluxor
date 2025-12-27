@@ -25,7 +25,7 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 
 	// Deploy a test verticle
 	testVerticle := &TestVerticle{}
-		_, err := gocmd.DeployVerticle(testVerticle)
+	_, err := gocmd.DeployVerticle(testVerticle)
 	if err != nil {
 		t.Fatalf("Failed to deploy verticle: %v", err)
 	}

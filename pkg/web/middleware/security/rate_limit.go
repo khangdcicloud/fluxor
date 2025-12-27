@@ -37,16 +37,16 @@ func DefaultRateLimitConfig() RateLimitConfig {
 
 // rateLimiter implements token bucket rate limiting
 type rateLimiter struct {
-	mu          sync.RWMutex
-	buckets     map[string]*tokenBucket
+	mu            sync.RWMutex
+	buckets       map[string]*tokenBucket
 	cleanupTicker *time.Ticker
-	cleanupDone  chan struct{}
+	cleanupDone   chan struct{}
 }
 
 type tokenBucket struct {
 	tokens     int
 	lastRefill time.Time
-	capacity  int
+	capacity   int
 	refillRate time.Duration // time between refills
 	mu         sync.Mutex
 }
@@ -213,4 +213,3 @@ func RateLimit(config RateLimitConfig) web.FastMiddleware {
 		}
 	}
 }
-

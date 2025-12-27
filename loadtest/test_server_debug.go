@@ -88,7 +88,7 @@ func main() {
 
 	// Give it time to start
 	time.Sleep(2 * time.Second)
-	
+
 	// Check for error
 	select {
 	case err := <-errCh:

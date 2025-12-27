@@ -45,4 +45,3 @@ func TestSecurityMiddleware(t *testing.T) {
 	_ = corsMw
 	_ = rateLimitMw
 }
-

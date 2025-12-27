@@ -354,10 +354,10 @@ func (c *consumer) processMessages(ctx context.Context) error {
 			// Use the consumer's context (now properly initialized)
 			fluxorCtx := c.ctx
 			if fluxorCtx == nil {
-			// Fallback: create context if somehow nil (shouldn't happen after fix)
-			if c.eventBus.gocmd != nil {
-				fluxorCtx = newFluxorContext(c.eventBus.ctx, c.eventBus.gocmd)
-			}
+				// Fallback: create context if somehow nil (shouldn't happen after fix)
+				if c.eventBus.gocmd != nil {
+					fluxorCtx = newFluxorContext(c.eventBus.ctx, c.eventBus.gocmd)
+				}
 			}
 
 			// Wrap handler call in panic recovery for individual messages (panic isolation)

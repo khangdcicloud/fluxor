@@ -30,7 +30,7 @@ type LoggingConfig struct {
 // DefaultLoggingConfig returns a default logging configuration
 func DefaultLoggingConfig() LoggingConfig {
 	return LoggingConfig{
-		Logger:        core.NewDefaultLogger(),
+		Logger:       core.NewDefaultLogger(),
 		LogRequestID: true,
 		SkipPaths:    []string{"/health", "/ready", "/metrics"},
 	}
@@ -106,4 +106,3 @@ func Logging(config LoggingConfig) web.FastMiddleware {
 		}
 	}
 }
-

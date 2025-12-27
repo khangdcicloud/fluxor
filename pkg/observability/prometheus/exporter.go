@@ -54,4 +54,3 @@ func HandlerFor(registry *prometheus.Registry) http.Handler {
 		EnableOpenMetrics: true,
 	})
 }
-

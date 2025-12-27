@@ -24,7 +24,7 @@ type CompressionConfig struct {
 // DefaultCompressionConfig returns a default compression configuration
 func DefaultCompressionConfig() CompressionConfig {
 	return CompressionConfig{
-		Level:  6,
+		Level:   6,
 		MinSize: 1024,
 		ContentTypes: []string{
 			"text/plain",
@@ -108,4 +108,3 @@ func Compression(config CompressionConfig) web.FastMiddleware {
 		}
 	}
 }
-

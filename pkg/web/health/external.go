@@ -71,4 +71,3 @@ func HTTPCheckWithHeaders(url string, timeout time.Duration, headers map[string]
 		return nil
 	}
 }
-

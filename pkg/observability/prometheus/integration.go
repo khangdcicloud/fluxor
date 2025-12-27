@@ -70,4 +70,3 @@ func statusCodeString(code int) string {
 		return "unknown"
 	}
 }
-

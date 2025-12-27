@@ -13,11 +13,11 @@ import (
 	"github.com/fluxorio/fluxor/pkg/core"
 	"github.com/fluxorio/fluxor/pkg/fluxor"
 	"github.com/fluxorio/fluxor/pkg/fx"
+	"github.com/fluxorio/fluxor/pkg/observability/prometheus"
 	"github.com/fluxorio/fluxor/pkg/web"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/fluxorio/fluxor/pkg/observability/prometheus"
 )
 
 func main() {

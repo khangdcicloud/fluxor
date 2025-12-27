@@ -21,8 +21,8 @@ type ServiceMesh interface {
 
 // CallOptions defines options for a service call
 type CallOptions struct {
-	Timeout       time.Duration
-	RetryPolicy   *RetryPolicy
+	Timeout        time.Duration
+	RetryPolicy    *RetryPolicy
 	CircuitBreaker *CircuitBreakerConfig
 }
 

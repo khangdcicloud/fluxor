@@ -115,7 +115,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 		// Ready if queue < 90%, CCU < 90%, and DB is reachable
 		dbErr := dbPool.Ping(ctx.Context())
 		ready := metrics.QueueUtilization < 90 && metrics.CCUUtilization < 90 && dbErr == nil
-		
+
 		status := 200
 		if !ready {
 			status = 503

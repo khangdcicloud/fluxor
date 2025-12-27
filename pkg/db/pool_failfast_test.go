@@ -10,7 +10,7 @@ func TestNewPool_FailFast_EmptyDSN(t *testing.T) {
 		DSN:        "",
 		DriverName: "postgres",
 	}
-	
+
 	_, err := NewPool(config)
 	if err == nil {
 		t.Error("NewPool() should fail-fast with empty DSN")
@@ -25,7 +25,7 @@ func TestNewPool_FailFast_EmptyDriverName(t *testing.T) {
 		DSN:        "postgres://localhost/db",
 		DriverName: "",
 	}
-	
+
 	_, err := NewPool(config)
 	if err == nil {
 		t.Error("NewPool() should fail-fast with empty DriverName")
@@ -38,7 +38,7 @@ func TestNewPool_FailFast_InvalidMaxOpenConns(t *testing.T) {
 		DriverName:   "postgres",
 		MaxOpenConns: 0, // Invalid
 	}
-	
+
 	_, err := NewPool(config)
 	if err == nil {
 		t.Error("NewPool() should fail-fast with MaxOpenConns <= 0")
@@ -52,7 +52,7 @@ func TestNewPool_FailFast_InvalidMaxIdleConns(t *testing.T) {
 		MaxOpenConns: 10,
 		MaxIdleConns: -1, // Invalid
 	}
-	
+
 	_, err := NewPool(config)
 	if err == nil {
 		t.Error("NewPool() should fail-fast with negative MaxIdleConns")
@@ -66,7 +66,7 @@ func TestNewPool_FailFast_MaxIdleExceedsMaxOpen(t *testing.T) {
 		MaxOpenConns: 10,
 		MaxIdleConns: 20, // Exceeds MaxOpenConns
 	}
-	
+
 	_, err := NewPool(config)
 	if err == nil {
 		t.Error("NewPool() should fail-fast when MaxIdleConns > MaxOpenConns")
@@ -75,7 +75,7 @@ func TestNewPool_FailFast_MaxIdleExceedsMaxOpen(t *testing.T) {
 
 func TestPool_Query_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	ctx := context.Background()
 	_, err := pool.Query(ctx, "SELECT 1")
 	if err == nil {
@@ -88,7 +88,7 @@ func TestPool_Query_FailFast_NilContext(t *testing.T) {
 	// For unit testing, we test the validation logic
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	pool := &Pool{config: config} // pool.db is nil
-	
+
 	// Test nil context validation (fail-fast)
 	var nilCtx context.Context = nil
 	_, err := pool.Query(nilCtx, "SELECT 1")
@@ -100,7 +100,7 @@ func TestPool_Query_FailFast_NilContext(t *testing.T) {
 func TestPool_Query_FailFast_EmptyQuery(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	pool := &Pool{config: config} // pool.db is nil
-	
+
 	ctx := context.Background()
 	_, err := pool.Query(ctx, "")
 	if err == nil {
@@ -110,21 +110,21 @@ func TestPool_Query_FailFast_EmptyQuery(t *testing.T) {
 
 func TestPool_QueryRow_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	ctx := context.Background()
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("QueryRow() should panic with nil pool")
 		}
 	}()
-	
+
 	pool.QueryRow(ctx, "SELECT 1")
 }
 
 func TestPool_Exec_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, "SELECT 1")
 	if err == nil {
@@ -134,7 +134,7 @@ func TestPool_Exec_FailFast_NilPool(t *testing.T) {
 
 func TestPool_Begin_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	ctx := context.Background()
 	_, err := pool.Begin(ctx)
 	if err == nil {
@@ -145,7 +145,7 @@ func TestPool_Begin_FailFast_NilPool(t *testing.T) {
 func TestPool_Begin_FailFast_NilContext(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	pool := &Pool{config: config}
-	
+
 	// Test nil context validation (fail-fast)
 	var nilCtx context.Context = nil
 	_, err := pool.Begin(nilCtx)
@@ -156,7 +156,7 @@ func TestPool_Begin_FailFast_NilContext(t *testing.T) {
 
 func TestPool_Ping_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	ctx := context.Background()
 	err := pool.Ping(ctx)
 	if err == nil {
@@ -167,7 +167,7 @@ func TestPool_Ping_FailFast_NilPool(t *testing.T) {
 func TestPool_Ping_FailFast_NilContext(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	pool := &Pool{config: config}
-	
+
 	// Test nil context validation (fail-fast)
 	var nilCtx context.Context = nil
 	err := pool.Ping(nilCtx)
@@ -178,13 +178,13 @@ func TestPool_Ping_FailFast_NilContext(t *testing.T) {
 
 func TestPool_DB_FailFast_NilPool(t *testing.T) {
 	var pool *Pool = nil
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("DB() should panic with nil pool")
 		}
 	}()
-	
+
 	pool.DB()
 }
 
@@ -194,7 +194,7 @@ func TestNewDatabaseComponent_FailFast_EmptyDSN(t *testing.T) {
 			t.Error("NewDatabaseComponent() should panic with empty DSN")
 		}
 	}()
-	
+
 	config := PoolConfig{
 		DSN:        "",
 		DriverName: "postgres",
@@ -208,7 +208,7 @@ func TestNewDatabaseComponent_FailFast_EmptyDriverName(t *testing.T) {
 			t.Error("NewDatabaseComponent() should panic with empty DriverName")
 		}
 	}()
-	
+
 	config := PoolConfig{
 		DSN:        "postgres://localhost/db",
 		DriverName: "",
@@ -222,7 +222,7 @@ func TestNewDatabaseComponent_FailFast_InvalidMaxOpenConns(t *testing.T) {
 			t.Error("NewDatabaseComponent() should panic with MaxOpenConns <= 0")
 		}
 	}()
-	
+
 	config := PoolConfig{
 		DSN:          "postgres://localhost/db",
 		DriverName:   "postgres",
@@ -233,7 +233,7 @@ func TestNewDatabaseComponent_FailFast_InvalidMaxOpenConns(t *testing.T) {
 
 func TestDatabaseComponent_Query_FailFast_NilComponent(t *testing.T) {
 	var component *DatabaseComponent = nil
-	
+
 	ctx := context.Background()
 	_, err := component.Query(ctx, "SELECT 1")
 	if err == nil {
@@ -244,7 +244,7 @@ func TestDatabaseComponent_Query_FailFast_NilComponent(t *testing.T) {
 func TestDatabaseComponent_Query_FailFast_EmptyQuery(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	component := NewDatabaseComponent(config)
-	
+
 	ctx := context.Background()
 	_, err := component.Query(ctx, "")
 	if err == nil {
@@ -254,41 +254,40 @@ func TestDatabaseComponent_Query_FailFast_EmptyQuery(t *testing.T) {
 
 func TestDatabaseComponent_QueryRow_FailFast_NilComponent(t *testing.T) {
 	var component *DatabaseComponent = nil
-	
+
 	ctx := context.Background()
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("QueryRow() should panic with nil component")
 		}
 	}()
-	
+
 	component.QueryRow(ctx, "SELECT 1")
 }
 
 func TestDatabaseComponent_Pool_FailFast_NotStarted(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	component := NewDatabaseComponent(config)
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Pool() should panic when component not started")
 		}
 	}()
-	
+
 	component.Pool()
 }
 
 func TestDatabaseComponent_DB_FailFast_NotStarted(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
 	component := NewDatabaseComponent(config)
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("DB() should panic when component not started")
 		}
 	}()
-	
+
 	component.DB()
 }
-

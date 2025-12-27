@@ -135,4 +135,3 @@ func FormatHealthResponseString(status Status, checks map[string]CheckResult, re
 	}
 	return string(data), nil
 }
-

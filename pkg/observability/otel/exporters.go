@@ -63,4 +63,3 @@ func (e *noopExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnl
 func (e *noopExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
-

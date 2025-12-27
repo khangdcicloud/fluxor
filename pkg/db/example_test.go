@@ -3,7 +3,7 @@ package db_test
 import (
 	"context"
 	"database/sql"
-	
+
 	"github.com/fluxorio/fluxor/pkg/core"
 	"github.com/fluxorio/fluxor/pkg/db"
 )
@@ -15,7 +15,7 @@ func ExampleNewPool() {
 		"postgres://user:pass@localhost/dbname",
 		"postgres",
 	)
-	
+
 	// Create pool (similar to HikariDataSource)
 	pool, err := db.NewPool(config)
 	if err != nil {
@@ -23,7 +23,7 @@ func ExampleNewPool() {
 		return
 	}
 	defer pool.Close()
-	
+
 	// Use pool (connections are automatically managed)
 	ctx := context.Background()
 	rows, err := pool.Query(ctx, "SELECT id, name FROM users")
@@ -32,7 +32,7 @@ func ExampleNewPool() {
 		return
 	}
 	defer rows.Close()
-	
+
 	// Process rows
 	for rows.Next() {
 		var id int
@@ -55,7 +55,7 @@ func ExampleDatabaseComponent() {
 		"postgres",
 	)
 	component := db.NewDatabaseComponent(config)
-	
+
 	// In a verticle's doStart method:
 	// Note: In real usage, FluxorContext is provided by the framework
 	// This is just an example - actual usage would be in a verticle's doStart method
@@ -69,7 +69,7 @@ func ExampleDatabaseComponent() {
 	//     rows, err := component.Query(ctx.Context(), "SELECT * FROM users")
 	//     ...
 	// }
-	
+
 	_ = component
 }
 
@@ -80,7 +80,7 @@ func ExampleDatabaseComponent_inService() {
 		*core.BaseService
 		db *db.DatabaseComponent
 	}
-	
+
 	// Create service
 	service := &UserService{
 		BaseService: core.NewBaseService("user-service", "user.service"),
@@ -91,37 +91,37 @@ func ExampleDatabaseComponent_inService() {
 			),
 		),
 	}
-	
+
 	// In doStart:
 	doStart := func(ctx core.FluxorContext) error {
 		service.db.SetParent(service.BaseVerticle)
 		return service.db.Start(ctx)
 	}
-	
+
 	// In doHandleRequest:
 	doHandleRequest := func(ctx core.FluxorContext, msg core.Message) error {
 		userID := msg.Body().(string)
-		
+
 		var name string
 		err := service.db.QueryRow(
 			context.Background(), // Use context from FluxorContext: ctx.Context()
 			"SELECT name FROM users WHERE id = $1",
 			userID,
 		).Scan(&name)
-		
+
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return service.Fail(msg, 404, "User not found")
 			}
 			return service.Fail(msg, 500, err.Error())
 		}
-		
+
 		return service.Reply(msg, map[string]interface{}{
 			"id":   userID,
 			"name": name,
 		})
 	}
-	
+
 	_ = doStart
 	_ = doHandleRequest
 }
@@ -134,12 +134,12 @@ func ExamplePool_Stats() {
 	)
 	pool, _ := db.NewPool(config)
 	defer pool.Close()
-	
+
 	// Get pool statistics
 	stats := pool.Stats()
-	
+
 	// Monitor pool health
-	_ = stats.OpenConnections  // Current open connections
+	_ = stats.OpenConnections   // Current open connections
 	_ = stats.InUse             // Connections in use
 	_ = stats.Idle              // Idle connections
 	_ = stats.WaitCount         // Number of connections waiting
@@ -148,4 +148,3 @@ func ExamplePool_Stats() {
 	_ = stats.MaxIdleTimeClosed // Connections closed due to MaxIdleTime
 	_ = stats.MaxLifetimeClosed // Connections closed due to MaxLifetime
 }
-

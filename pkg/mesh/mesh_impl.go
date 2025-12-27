@@ -70,7 +70,7 @@ func (m *meshImpl) Call(ctx context.Context, serviceName string, action string, 
 		}
 
 		lastErr = err
-		
+
 		// If it's a timeout or network error, we might want to fail the breaker
 		// For simplicity, we count all errors as failures
 		cb.Failure()
@@ -81,7 +81,7 @@ func (m *meshImpl) Call(ctx context.Context, serviceName string, action string, 
 			if sleepDuration > retryPolicy.MaxInterval {
 				sleepDuration = retryPolicy.MaxInterval
 			}
-			
+
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -105,7 +105,7 @@ func (m *meshImpl) getCircuitBreaker(serviceName string) *CircuitBreaker {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Double check
 	if cb, ok := m.breakers[serviceName]; ok {
 		return cb

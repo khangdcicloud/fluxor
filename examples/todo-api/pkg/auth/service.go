@@ -41,16 +41,16 @@ func (v *AuthVerticle) handleRegister(ctx core.FluxorContext, msg core.Message) 
 	}
 
 	var userID int
-	err = v.DB.QueryRow(context.Background(), 
+	err = v.DB.QueryRow(context.Background(),
 		"INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
 		req.Username, string(hash)).Scan(&userID)
-	
+
 	if err != nil {
 		return msg.Reply(map[string]interface{}{"error": "username already exists"})
 	}
 
 	return msg.Reply(map[string]interface{}{
-		"id": userID,
+		"id":       userID,
 		"username": req.Username,
 	})
 }
@@ -66,10 +66,10 @@ func (v *AuthVerticle) handleLogin(ctx core.FluxorContext, msg core.Message) err
 
 	var id int
 	var hash string
-	err := v.DB.QueryRow(context.Background(), 
+	err := v.DB.QueryRow(context.Background(),
 		"SELECT id, password_hash FROM users WHERE username = $1",
 		req.Username).Scan(&id, &hash)
-	
+
 	if err == pgx.ErrNoRows {
 		return msg.Reply(map[string]interface{}{"error": "invalid credentials"})
 	}

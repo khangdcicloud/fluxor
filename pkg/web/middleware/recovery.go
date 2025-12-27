@@ -62,4 +62,3 @@ func Recovery(config RecoveryConfig) web.FastMiddleware {
 		}
 	}
 }
-

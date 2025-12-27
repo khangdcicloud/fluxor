@@ -77,4 +77,3 @@ func TestAPIKeyMiddleware(t *testing.T) {
 		t.Error("Validator should reject invalid key")
 	}
 }
-

@@ -7,7 +7,7 @@ import (
 
 func TestDefaultPoolConfig(t *testing.T) {
 	config := DefaultPoolConfig("test-dsn", "postgres")
-	
+
 	if config.DSN != "test-dsn" {
 		t.Errorf("DSN = %v, want test-dsn", config.DSN)
 	}
@@ -37,7 +37,7 @@ func TestPoolConfig(t *testing.T) {
 		ConnMaxLifetime: 10 * time.Minute,
 		ConnMaxIdleTime: 20 * time.Minute,
 	}
-	
+
 	if config.DSN != "test-dsn" {
 		t.Errorf("DSN = %v, want test-dsn", config.DSN)
 	}
@@ -48,4 +48,3 @@ func TestPoolConfig(t *testing.T) {
 
 // Note: Actual pool tests would require a real database connection
 // These are unit tests for configuration only
-

@@ -137,4 +137,3 @@ type contextWithSpan interface {
 
 // Note: The actual context.Context returned from StartSpan already contains the span,
 // so we can use trace.SpanFromContext() directly. This interface is for type checking.
-

@@ -153,10 +153,10 @@ func (e *Engine) startExecution(ctx context.Context, workflowID string, input in
 	}
 
 	executionID := uuid.New().String()
-	
+
 	// Create cancellable context for this execution
 	execCtx, cancel := context.WithCancel(ctx)
-	
+
 	e.execCtxMu.Lock()
 	e.execContexts[executionID] = cancel
 	e.execCtxMu.Unlock()

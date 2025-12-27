@@ -104,4 +104,3 @@ func (v *FastHTTPVerticle) FastRouter() *FastRouter {
 	}
 	return v.server.FastRouter()
 }
-

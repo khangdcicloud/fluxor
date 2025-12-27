@@ -143,4 +143,3 @@ func WrapConsumerHandler(address string, handler core.MessageHandler) core.Messa
 		return err
 	}
 }
-
