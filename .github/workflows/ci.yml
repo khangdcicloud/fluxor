@@ -82,6 +82,7 @@ jobs:
         echo "Step timeout: 15 minutes"
         
         # Exclude loadtest, workflow-demo, and todo-api directories from tests
+        # Note: examples/load-balancing is included and will be tested
         # Use timeout command to ensure tests are killed even if Go timeout fails
         # This prevents hanging tests from blocking CI
         timeout 10m bash -c '
