@@ -36,24 +36,24 @@ type ChatRequest struct {
 	Temperature float64   `json:"temperature,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	TopP        float64   `json:"top_p,omitempty"`
-	Tools       []Tool    `json:"tools,omitempty"`        // For function calling
-	ToolChoice  string    `json:"tool_choice,omitempty"`  // "auto", "none", or specific tool
+	Tools       []Tool    `json:"tools,omitempty"`       // For function calling
+	ToolChoice  string    `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
 	Stream      bool      `json:"stream,omitempty"`
 }
 
 // Message represents a chat message
 type Message struct {
-	Role      string                 `json:"role"`                // "system", "user", "assistant", "tool"
-	Content   string                 `json:"content,omitempty"`  // Text content
-	ToolCalls []ToolCall             `json:"tool_calls,omitempty"` // Tool calls from assistant
-	ToolCallID string                `json:"tool_call_id,omitempty"` // For tool messages
-	Name      string                 `json:"name,omitempty"`      // Tool name
+	Role       string     `json:"role"`                   // "system", "user", "assistant", "tool"
+	Content    string     `json:"content,omitempty"`      // Text content
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // Tool calls from assistant
+	ToolCallID string     `json:"tool_call_id,omitempty"` // For tool messages
+	Name       string     `json:"name,omitempty"`         // Tool name
 }
 
 // Tool represents a function/tool definition for function calling
 type Tool struct {
-	Type     string                 `json:"type"` // "function"
-	Function FunctionDefinition    `json:"function"`
+	Type     string             `json:"type"` // "function"
+	Function FunctionDefinition `json:"function"`
 }
 
 // FunctionDefinition defines a function for tool calling
@@ -65,9 +65,9 @@ type FunctionDefinition struct {
 
 // ToolCall represents a tool call from the assistant
 type ToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"` // "function"
-	Function ToolCallFunction      `json:"function"`
+	ID       string           `json:"id"`
+	Type     string           `json:"type"` // "function"
+	Function ToolCallFunction `json:"function"`
 }
 
 // ToolCallFunction contains the function call details
@@ -86,9 +86,9 @@ type ChatResponse struct {
 
 // Choice represents a response choice
 type Choice struct {
-	Index        int      `json:"index"`
-	Message      Message  `json:"message"`
-	FinishReason string   `json:"finish_reason"`
+	Index        int     `json:"index"`
+	Message      Message `json:"message"`
+	FinishReason string  `json:"finish_reason"`
 }
 
 // Usage represents token usage
@@ -126,14 +126,14 @@ type EmbedUsage struct {
 
 // Config represents AI module configuration
 type Config struct {
-	Provider      Provider        `json:"provider"`
-	APIKey        string          `json:"apiKey,omitempty"`
-	BaseURL       string          `json:"baseURL,omitempty"`
-	DefaultModel  string          `json:"defaultModel,omitempty"`
-	Timeout       time.Duration  `json:"timeout,omitempty"`
-	MaxRetries    int             `json:"maxRetries,omitempty"`
-	RateLimit     *RateLimitConfig `json:"rateLimit,omitempty"`
-	Cache         *CacheConfig    `json:"cache,omitempty"`
+	Provider     Provider         `json:"provider"`
+	APIKey       string           `json:"apiKey,omitempty"`
+	BaseURL      string           `json:"baseURL,omitempty"`
+	DefaultModel string           `json:"defaultModel,omitempty"`
+	Timeout      time.Duration    `json:"timeout,omitempty"`
+	MaxRetries   int              `json:"maxRetries,omitempty"`
+	RateLimit    *RateLimitConfig `json:"rateLimit,omitempty"`
+	Cache        *CacheConfig     `json:"cache,omitempty"`
 }
 
 // RateLimitConfig configures rate limiting
@@ -147,4 +147,3 @@ type CacheConfig struct {
 	Enabled bool          `json:"enabled"`
 	TTL     time.Duration `json:"ttl,omitempty"`
 }
-

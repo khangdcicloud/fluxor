@@ -15,8 +15,8 @@ func TestNewClient(t *testing.T) {
 			name: "valid OpenAI config with API key",
 			config: Config{
 				Provider: ProviderOpenAI,
-				APIKey:  "test-key",
-				Model:   "gpt-3.5-turbo",
+				APIKey:   "test-key",
+				Model:    "gpt-3.5-turbo",
 			},
 			wantErr: false,
 		},
@@ -24,8 +24,8 @@ func TestNewClient(t *testing.T) {
 			name: "valid Anthropic config",
 			config: Config{
 				Provider: ProviderAnthropic,
-				APIKey:  "test-key",
-				Model:   "claude-3-sonnet-20240229",
+				APIKey:   "test-key",
+				Model:    "claude-3-sonnet-20240229",
 			},
 			wantErr: false,
 		},
@@ -33,8 +33,8 @@ func TestNewClient(t *testing.T) {
 			name: "valid Cursor config",
 			config: Config{
 				Provider: ProviderCursor,
-				APIKey:  "test-key",
-				Model:   "gpt-4",
+				APIKey:   "test-key",
+				Model:    "gpt-4",
 			},
 			wantErr: false,
 		},
@@ -73,8 +73,8 @@ func TestAIClient_ChatRequest(t *testing.T) {
 
 	config := Config{
 		Provider: ProviderOpenAI,
-		APIKey:  "test-key",
-		Model:   "gpt-3.5-turbo",
+		APIKey:   "test-key",
+		Model:    "gpt-3.5-turbo",
 	}
 
 	client, err := NewClient(config)
@@ -100,7 +100,7 @@ func TestAIClient_ChatRequest(t *testing.T) {
 func TestAIClient_ChatRequest_Validation(t *testing.T) {
 	config := Config{
 		Provider: ProviderOpenAI,
-		APIKey:  "test-key",
+		APIKey:   "test-key",
 	}
 
 	client, err := NewClient(config)
@@ -191,4 +191,3 @@ func TestGetProviderDefaultModel(t *testing.T) {
 		})
 	}
 }
-

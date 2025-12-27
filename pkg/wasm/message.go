@@ -2,14 +2,14 @@ package wasm
 
 // WSMessage represents a WebSocket message
 type WSMessage struct {
-	Op      string                 `json:"op"`      // publish, send, request, subscribe, unsubscribe, message
-	Address string                 `json:"address"` // EventBus address
-	Body    interface{}            `json:"body"`    // Message body
-	ID      string                 `json:"id"`     // Request ID for request/reply
-	Timeout int64                  `json:"timeout"` // Timeout in milliseconds
-	Error   string                 `json:"error,omitempty"`
-	Result  interface{}            `json:"result,omitempty"`
-	Headers map[string]string      `json:"headers,omitempty"`
+	Op      string            `json:"op"`      // publish, send, request, subscribe, unsubscribe, message
+	Address string            `json:"address"` // EventBus address
+	Body    interface{}       `json:"body"`    // Message body
+	ID      string            `json:"id"`      // Request ID for request/reply
+	Timeout int64             `json:"timeout"` // Timeout in milliseconds
+	Error   string            `json:"error,omitempty"`
+	Result  interface{}       `json:"result,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Message represents a received message
@@ -38,4 +38,3 @@ func (m *messageImpl) DecodeBody(v interface{}) error {
 	// This will be implemented using syscall/js
 	return nil
 }
-

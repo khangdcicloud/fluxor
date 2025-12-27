@@ -59,4 +59,3 @@ func TestRateLimiter_RemainingTokens(t *testing.T) {
 		t.Errorf("Expected 8 remaining minute tokens, got %d", minute)
 	}
 }
-

@@ -268,4 +268,3 @@ func setProviderHeaders(req *http.Request, provider Provider, apiKey string) {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 }
-

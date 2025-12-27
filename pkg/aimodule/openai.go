@@ -101,9 +101,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	messages := make([]openai.ChatCompletionMessage, len(req.Messages))
 	for i, msg := range req.Messages {
 		messages[i] = openai.ChatCompletionMessage{
-			Role:      msg.Role,
-			Content:   msg.Content,
-			Name:      msg.Name,
+			Role:       msg.Role,
+			Content:    msg.Content,
+			Name:       msg.Name,
 			ToolCallID: msg.ToolCallID,
 		}
 
@@ -200,8 +200,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Convert response
 	chatResp := &ChatResponse{
-		ID:    resp.ID,
-		Model: resp.Model,
+		ID:      resp.ID,
+		Model:   resp.Model,
 		Choices: make([]Choice, len(resp.Choices)),
 		Usage: Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
@@ -307,7 +307,7 @@ func (c *OpenAIClient) Embed(ctx context.Context, req EmbedRequest) (*EmbedRespo
 		Data:  make([]EmbeddingData, len(resp.Data)),
 		Usage: EmbedUsage{
 			PromptTokens: resp.Usage.PromptTokens,
-			TotalTokens: resp.Usage.TotalTokens,
+			TotalTokens:  resp.Usage.TotalTokens,
 		},
 	}
 
@@ -327,4 +327,3 @@ func (c *OpenAIClient) Embed(ctx context.Context, req EmbedRequest) (*EmbedRespo
 
 	return embedResp, nil
 }
-

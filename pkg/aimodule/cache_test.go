@@ -102,4 +102,3 @@ func TestGenerateCacheKey(t *testing.T) {
 		t.Error("Different requests should generate different cache keys")
 	}
 }
-

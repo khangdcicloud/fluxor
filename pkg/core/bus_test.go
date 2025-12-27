@@ -56,7 +56,7 @@ func TestBus_Publish_NilMessage(t *testing.T) {
 
 	// Publish nil message - handlers should handle it
 	bus.Publish("test.topic", nil)
-	
+
 	// Wait for handler to complete to avoid goroutine leak
 	select {
 	case <-done:

@@ -169,13 +169,13 @@ func (s *fsStore) Append(data []byte) (Offset, error) {
 		s.cfg.Observer.OnAppendRejected(RejectInfo{Bytes: 0, Reason: ErrInvalidData})
 		return 0, ErrInvalidData
 	}
-	
+
 	// Check closed state and capture channel atomically
 	s.mu.RLock()
 	closed := s.closed
 	ch := s.appendCh
 	s.mu.RUnlock()
-	
+
 	if closed || ch == nil {
 		s.cfg.Observer.OnAppendRejected(RejectInfo{Bytes: len(data), Reason: ErrClosed})
 		return 0, ErrClosed
@@ -325,7 +325,7 @@ func (s *fsStore) Close() error {
 	if ch != nil {
 		close(ch)
 	}
-	
+
 	// Wait for flushLoop to finish processing remaining requests
 	s.flushWg.Wait()
 

@@ -57,4 +57,3 @@ func SetDefaultClient(client LLMClient) {
 	defer defaultMu.Unlock()
 	defaultClient = client
 }
-

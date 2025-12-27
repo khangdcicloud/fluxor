@@ -35,4 +35,3 @@ func NotNil(ptr interface{}, name string) {
 		panic(fmt.Errorf("fail-fast: %s is nil", name))
 	}
 }
-

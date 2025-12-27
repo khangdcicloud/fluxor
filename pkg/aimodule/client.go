@@ -70,4 +70,3 @@ func getProviderEnvVar(provider Provider) string {
 		return "AI_API_KEY"
 	}
 }
-

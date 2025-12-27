@@ -120,4 +120,3 @@ func TestNotNil(t *testing.T) {
 		NotNil(val, "val")
 	})
 }
-

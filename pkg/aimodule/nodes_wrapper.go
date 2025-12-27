@@ -9,4 +9,3 @@ type EventBusError struct {
 func (e *EventBusError) Error() string {
 	return e.Message
 }
-

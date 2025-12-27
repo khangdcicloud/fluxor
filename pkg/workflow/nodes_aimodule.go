@@ -53,4 +53,3 @@ func AIEmbedNodeHandler(ctx context.Context, input *NodeInput) (*NodeOutput, err
 		Stop:      aimoduleOutput.Stop,
 	}, nil
 }
-

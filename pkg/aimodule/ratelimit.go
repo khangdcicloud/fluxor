@@ -92,4 +92,3 @@ func (rl *RateLimiter) RemainingTokens() (minute, day int) {
 
 	return rl.minuteTokens, rl.dayTokens
 }
-

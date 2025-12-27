@@ -100,4 +100,3 @@ func (c *AIComponent) ChatSimple(ctx core.FluxorContext, prompt string) (string,
 	}
 	return client.ChatSimple(ctx.Context(), prompt)
 }
-

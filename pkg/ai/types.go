@@ -23,11 +23,11 @@ type Message struct {
 // ChatRequest represents a chat completion request
 type ChatRequest struct {
 	Model       string    `json:"model"`                 // Model name
-	Messages    []Message `json:"messages"`             // Chat messages
-	Temperature float64  `json:"temperature,omitempty"` // Temperature (0-2)
-	MaxTokens   int      `json:"max_tokens,omitempty"`  // Max tokens
-	TopP        float64  `json:"top_p,omitempty"`      // Top P
-	Stream      bool     `json:"stream,omitempty"`      // Stream response
+	Messages    []Message `json:"messages"`              // Chat messages
+	Temperature float64   `json:"temperature,omitempty"` // Temperature (0-2)
+	MaxTokens   int       `json:"max_tokens,omitempty"`  // Max tokens
+	TopP        float64   `json:"top_p,omitempty"`       // Top P
+	Stream      bool      `json:"stream,omitempty"`      // Stream response
 }
 
 // ChatResponse represents a chat completion response
@@ -67,9 +67,8 @@ type Client interface {
 // Config represents AI client configuration
 type Config struct {
 	Provider Provider `json:"provider"` // AI provider
-	APIKey  string   `json:"apiKey"`   // API key (or use env var)
+	APIKey   string   `json:"apiKey"`   // API key (or use env var)
 	BaseURL  string   `json:"baseURL"`  // Base URL (optional, provider-specific defaults)
-	Model    string   `json:"model"`     // Default model
-	Timeout  string   `json:"timeout"`   // Request timeout (default: 60s)
+	Model    string   `json:"model"`    // Default model
+	Timeout  string   `json:"timeout"`  // Request timeout (default: 60s)
 }
-

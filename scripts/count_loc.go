@@ -11,10 +11,10 @@ import (
 )
 
 type FileStats struct {
-	TotalLines  int
-	CodeLines   int
+	TotalLines   int
+	CodeLines    int
 	CommentLines int
-	BlankLines  int
+	BlankLines   int
 }
 
 type LanguageStats struct {
@@ -54,47 +54,47 @@ var (
 	}
 
 	fileExtensions = map[string]string{
-		".go":   "Go",
-		".ts":   "TypeScript",
-		".tsx":  "TypeScript",
-		".js":   "JavaScript",
-		".jsx":  "JavaScript",
-		".md":   "Markdown",
-		".yaml": "YAML",
-		".yml":  "YAML",
-		".json": "JSON",
-		".toml": "TOML",
-		".css":  "CSS",
-		".html": "HTML",
-		".sh":   "Shell",
-		".bat":  "Batch",
-		".ps1":  "PowerShell",
-		".sql":  "SQL",
-		".proto": "Protocol Buffers",
-		".vue":  "Vue",
+		".go":     "Go",
+		".ts":     "TypeScript",
+		".tsx":    "TypeScript",
+		".js":     "JavaScript",
+		".jsx":    "JavaScript",
+		".md":     "Markdown",
+		".yaml":   "YAML",
+		".yml":    "YAML",
+		".json":   "JSON",
+		".toml":   "TOML",
+		".css":    "CSS",
+		".html":   "HTML",
+		".sh":     "Shell",
+		".bat":    "Batch",
+		".ps1":    "PowerShell",
+		".sql":    "SQL",
+		".proto":  "Protocol Buffers",
+		".vue":    "Vue",
 		".svelte": "Svelte",
 	}
 
 	commentPatterns = map[string]*regexp.Regexp{
-		"Go":          regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
-		"TypeScript":  regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
-		"JavaScript":  regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
-		"CSS":         regexp.MustCompile(`^\s*/\*|\*/`),
-		"HTML":        regexp.MustCompile(`<!--|-->`),
-		"Shell":       regexp.MustCompile(`^\s*#`),
-		"Batch":       regexp.MustCompile(`^\s*REM|^\s*::`),
-		"PowerShell":  regexp.MustCompile(`^\s*#`),
-		"SQL":         regexp.MustCompile(`^\s*--|^\s*/\*|\*/`),
+		"Go":               regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
+		"TypeScript":       regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
+		"JavaScript":       regexp.MustCompile(`^\s*//|^\s*/\*|\*/`),
+		"CSS":              regexp.MustCompile(`^\s*/\*|\*/`),
+		"HTML":             regexp.MustCompile(`<!--|-->`),
+		"Shell":            regexp.MustCompile(`^\s*#`),
+		"Batch":            regexp.MustCompile(`^\s*REM|^\s*::`),
+		"PowerShell":       regexp.MustCompile(`^\s*#`),
+		"SQL":              regexp.MustCompile(`^\s*--|^\s*/\*|\*/`),
 		"Protocol Buffers": regexp.MustCompile(`^\s*//`),
 	}
 )
 
 func main() {
 	var (
-		outputJSON = flag.Bool("json", false, "Output in JSON format")
-		outputFile = flag.String("output", "statistic.log", "Output file path")
+		outputJSON   = flag.Bool("json", false, "Output in JSON format")
+		outputFile   = flag.String("output", "statistic.log", "Output file path")
 		excludeTests = flag.Bool("no-tests", false, "Exclude test files from statistics")
-		verbose = flag.Bool("v", false, "Verbose output")
+		verbose      = flag.Bool("v", false, "Verbose output")
 	)
 	flag.Parse()
 
@@ -133,7 +133,7 @@ func main() {
 
 		ext := strings.ToLower(filepath.Ext(path))
 		baseName := filepath.Base(path)
-		
+
 		// Check if file extension is supported
 		lang, ok := fileExtensions[ext]
 		if !ok {
@@ -211,10 +211,10 @@ func isTestFile(filename, ext string) bool {
 		return strings.HasSuffix(filename, "_test.go")
 	}
 	if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
-		return strings.Contains(filename, ".test.") || 
-			   strings.Contains(filename, ".spec.") ||
-			   strings.HasSuffix(filename, ".test.ts") ||
-			   strings.HasSuffix(filename, ".test.js")
+		return strings.Contains(filename, ".test.") ||
+			strings.Contains(filename, ".spec.") ||
+			strings.HasSuffix(filename, ".test.ts") ||
+			strings.HasSuffix(filename, ".test.js")
 	}
 	return false
 }
@@ -235,7 +235,7 @@ func analyzeFile(filePath, language string) (*FileStats, error) {
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check for blank lines
 		if trimmed == "" {
 			stats.BlankLines++
@@ -280,18 +280,18 @@ func generateTextReport(stats *ProjectStats, duration time.Duration) string {
 	sb.WriteString("───────────────────────────────────────────────────────────\n")
 	sb.WriteString(fmt.Sprintf("Total Files:        %6d files\n", stats.TotalFiles))
 	sb.WriteString(fmt.Sprintf("Total Lines:        %6d lines\n", stats.TotalLines))
-	sb.WriteString(fmt.Sprintf("  ├─ Code Lines:    %6d lines (%.1f%%)\n", 
+	sb.WriteString(fmt.Sprintf("  ├─ Code Lines:    %6d lines (%.1f%%)\n",
 		stats.CodeLines, float64(stats.CodeLines)/float64(stats.TotalLines)*100))
-	sb.WriteString(fmt.Sprintf("  ├─ Comment Lines: %6d lines (%.1f%%)\n", 
+	sb.WriteString(fmt.Sprintf("  ├─ Comment Lines: %6d lines (%.1f%%)\n",
 		stats.CommentLines, float64(stats.CommentLines)/float64(stats.TotalLines)*100))
-	sb.WriteString(fmt.Sprintf("  └─ Blank Lines:   %6d lines (%.1f%%)\n", 
+	sb.WriteString(fmt.Sprintf("  └─ Blank Lines:   %6d lines (%.1f%%)\n",
 		stats.BlankLines, float64(stats.BlankLines)/float64(stats.TotalLines)*100))
 	sb.WriteString("\n")
 
 	// Language breakdown
 	sb.WriteString("📋 LANGUAGE BREAKDOWN\n")
 	sb.WriteString("───────────────────────────────────────────────────────────\n")
-	sb.WriteString(fmt.Sprintf("%-20s %8s %10s %10s %10s %8s %10s\n", 
+	sb.WriteString(fmt.Sprintf("%-20s %8s %10s %10s %10s %8s %10s\n",
 		"Language", "Files", "Total", "Code", "Comments", "Tests", "Test Lines"))
 	sb.WriteString("───────────────────────────────────────────────────────────\n")
 
@@ -346,11 +346,11 @@ func generateTextReport(stats *ProjectStats, duration time.Duration) string {
 	sb.WriteString("───────────────────────────────────────────────────────────\n")
 	sb.WriteString(fmt.Sprintf("Source Code:\n"))
 	sb.WriteString(fmt.Sprintf("  Files: %d files\n", totalSourceFiles))
-	sb.WriteString(fmt.Sprintf("  Lines: %d lines (%.1f%%)\n", 
+	sb.WriteString(fmt.Sprintf("  Lines: %d lines (%.1f%%)\n",
 		totalSourceLines, float64(totalSourceLines)/float64(stats.TotalLines)*100))
 	sb.WriteString(fmt.Sprintf("Test Code:\n"))
 	sb.WriteString(fmt.Sprintf("  Files: %d files\n", totalTestFiles))
-	sb.WriteString(fmt.Sprintf("  Lines: %d lines (%.1f%%)\n", 
+	sb.WriteString(fmt.Sprintf("  Lines: %d lines (%.1f%%)\n",
 		totalTestLines, float64(totalTestLines)/float64(stats.TotalLines)*100))
 	sb.WriteString("\n")
 
@@ -360,7 +360,7 @@ func generateTextReport(stats *ProjectStats, duration time.Duration) string {
 		mainLangPercent := float64(mainLang.stats.TotalLines) / float64(stats.TotalLines) * 100
 		sb.WriteString("📊 DISTRIBUTION\n")
 		sb.WriteString("───────────────────────────────────────────────────────────\n")
-		sb.WriteString(fmt.Sprintf("Primary Language: %s (%.1f%% of codebase)\n", 
+		sb.WriteString(fmt.Sprintf("Primary Language: %s (%.1f%% of codebase)\n",
 			mainLang.name, mainLangPercent))
 		sb.WriteString("\n")
 	}
@@ -382,7 +382,7 @@ func generateJSONReport(stats *ProjectStats, duration time.Duration) string {
 	sb.WriteString(fmt.Sprintf(`  "comment_lines": %d,`+"\n", stats.CommentLines))
 	sb.WriteString(fmt.Sprintf(`  "blank_lines": %d,`+"\n", stats.BlankLines))
 	sb.WriteString(`  "languages": {` + "\n")
-	
+
 	first := true
 	for lang, langStats := range stats.Languages {
 		if !first {
@@ -399,7 +399,7 @@ func generateJSONReport(stats *ProjectStats, duration time.Duration) string {
 		sb.WriteString(fmt.Sprintf(`      "test_lines": %d`+"\n", langStats.TestLines))
 		sb.WriteString("    }")
 	}
-	
+
 	sb.WriteString("\n  }\n}")
 	return sb.String()
 }

@@ -103,4 +103,3 @@ func (c *Cache) Size() int {
 	defer c.mu.RUnlock()
 	return len(c.entries)
 }
-

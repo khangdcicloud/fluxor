@@ -398,4 +398,3 @@ func getMap(m map[string]interface{}, key string) map[string]interface{} {
 	}
 	return make(map[string]interface{})
 }
-

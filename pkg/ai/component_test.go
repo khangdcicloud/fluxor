@@ -10,8 +10,8 @@ import (
 func TestNewAIComponent(t *testing.T) {
 	config := Config{
 		Provider: ProviderOpenAI,
-		APIKey:  "test-key",
-		Model:   "gpt-3.5-turbo",
+		APIKey:   "test-key",
+		Model:    "gpt-3.5-turbo",
 	}
 
 	component := NewAIComponent(config)
@@ -33,8 +33,8 @@ func TestAIComponent_StartStop(t *testing.T) {
 	// This test requires a real API key or mock, so we'll test the structure
 	config := Config{
 		Provider: ProviderOpenAI,
-		APIKey:  "test-key",
-		Model:   "gpt-3.5-turbo",
+		APIKey:   "test-key",
+		Model:    "gpt-3.5-turbo",
 	}
 
 	component := NewAIComponent(config)
@@ -47,7 +47,7 @@ func TestAIComponent_StartStop(t *testing.T) {
 	// Create a test verticle to embed the component
 	testVerticle := &core.BaseVerticle{}
 	testVerticle = core.NewBaseVerticle("test")
-	
+
 	// Deploy verticle to get a proper context
 	deploymentID, err := gocmd.DeployVerticle(testVerticle)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestAIComponent_StartStop(t *testing.T) {
 func TestAIComponent_Client_NotStarted(t *testing.T) {
 	config := Config{
 		Provider: ProviderOpenAI,
-		APIKey:  "test-key",
+		APIKey:   "test-key",
 	}
 
 	component := NewAIComponent(config)
@@ -89,4 +89,3 @@ func TestAIComponent_Client_NotStarted(t *testing.T) {
 		t.Error("Client() should return error when component is not started")
 	}
 }
-
