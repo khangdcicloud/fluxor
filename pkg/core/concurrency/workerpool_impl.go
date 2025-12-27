@@ -38,6 +38,10 @@ func DefaultWorkerPoolConfig() WorkerPoolConfig {
 // NewWorkerPool creates a new WorkerPool
 // Hides goroutine and channel creation from callers
 func NewWorkerPool(ctx context.Context, config WorkerPoolConfig) WorkerPool {
+	// Fail-fast: context cannot be nil
+	if ctx == nil {
+		failFastIf(true, "context cannot be nil")
+	}
 	if config.Workers < 1 {
 		config.Workers = 1
 	}
@@ -104,6 +108,10 @@ func (wp *defaultWorkerPool) worker(id int) {
 
 // Stop implements WorkerPool interface
 func (wp *defaultWorkerPool) Stop(ctx context.Context) error {
+	// Fail-fast: context cannot be nil
+	if ctx == nil {
+		failFastIf(true, "context cannot be nil")
+	}
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 
@@ -135,8 +143,9 @@ func (wp *defaultWorkerPool) Stop(ctx context.Context) error {
 // Submit implements WorkerPool interface
 // Hides channel send operations
 func (wp *defaultWorkerPool) Submit(task Task) error {
+	// Fail-fast: task cannot be nil
 	if task == nil {
-		return fmt.Errorf("task cannot be nil")
+		failFastIf(true, "task cannot be nil")
 	}
 
 	if atomic.LoadInt32(&wp.running) == 0 {

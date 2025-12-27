@@ -37,6 +37,14 @@ type NamedTask struct {
 
 // NewNamedTask creates a new NamedTask
 func NewNamedTask(name string, task TaskFunc) *NamedTask {
+	// Fail-fast: name cannot be empty
+	if name == "" {
+		failFastIf(true, "task name cannot be empty")
+	}
+	// Fail-fast: task cannot be nil
+	if task == nil {
+		failFastIf(true, "task cannot be nil")
+	}
 	return &NamedTask{
 		name: name,
 		task: task,

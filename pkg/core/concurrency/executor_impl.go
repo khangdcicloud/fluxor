@@ -45,6 +45,10 @@ func DefaultExecutorConfig() ExecutorConfig {
 // NewExecutor creates a new Executor with the given configuration
 // Hides goroutine and channel creation from callers
 func NewExecutor(ctx context.Context, config ExecutorConfig) Executor {
+	// Fail-fast: context cannot be nil
+	if ctx == nil {
+		failFastIf(true, "context cannot be nil")
+	}
 	if config.Workers < 1 {
 		config.Workers = 1
 	}
@@ -107,8 +111,9 @@ func (e *defaultExecutor) worker(id int) {
 // Submit implements Executor interface
 // Hides channel send operations and select statements
 func (e *defaultExecutor) Submit(task Task) error {
+	// Fail-fast: task cannot be nil
 	if task == nil {
-		return fmt.Errorf("task cannot be nil")
+		failFastIf(true, "task cannot be nil")
 	}
 
 	e.mu.RLock()
@@ -135,8 +140,13 @@ func (e *defaultExecutor) Submit(task Task) error {
 
 // SubmitWithTimeout implements Executor interface
 func (e *defaultExecutor) SubmitWithTimeout(task Task, timeout time.Duration) error {
+	// Fail-fast: task cannot be nil
 	if task == nil {
-		return fmt.Errorf("task cannot be nil")
+		failFastIf(true, "task cannot be nil")
+	}
+	// Fail-fast: timeout must be positive
+	if timeout <= 0 {
+		failFastIf(true, "timeout must be positive")
 	}
 
 	e.mu.RLock()
@@ -162,6 +172,10 @@ func (e *defaultExecutor) SubmitWithTimeout(task Task, timeout time.Duration) er
 
 // Shutdown implements Executor interface
 func (e *defaultExecutor) Shutdown(ctx context.Context) error {
+	// Fail-fast: context cannot be nil
+	if ctx == nil {
+		failFastIf(true, "context cannot be nil")
+	}
 	e.mu.Lock()
 	if e.closed {
 		e.mu.Unlock()

@@ -165,6 +165,10 @@ func (bv *BaseVerticle) IsStopped() bool {
 // RegisterConsumer registers a consumer for automatic cleanup
 // This is a convenience method for subclasses
 func (bv *BaseVerticle) RegisterConsumer(consumer Consumer) {
+	// Fail-fast: consumer cannot be nil
+	if consumer == nil {
+		FailFast(&EventBusError{Code: "INVALID_CONSUMER", Message: "consumer cannot be nil"})
+	}
 	bv.mu.Lock()
 	defer bv.mu.Unlock()
 	bv.consumers = append(bv.consumers, consumer)
@@ -173,8 +177,9 @@ func (bv *BaseVerticle) RegisterConsumer(consumer Consumer) {
 // Consumer creates and registers a consumer for the given address
 // Returns the consumer for further configuration
 func (bv *BaseVerticle) Consumer(address string) Consumer {
+	// Fail-fast: verticle must be started
 	if bv.eventBus == nil {
-		panic("verticle not started - cannot create consumer")
+		FailFast(&EventBusError{Code: "NOT_STARTED", Message: "verticle not started - cannot create consumer"})
 	}
 	consumer := bv.eventBus.Consumer(address)
 	bv.RegisterConsumer(consumer)
@@ -208,6 +213,10 @@ func (bv *BaseVerticle) EventLoop() concurrency.Executor {
 // RunOnEventLoop executes a task on this verticle's event loop
 // Tasks are processed sequentially (single worker)
 func (bv *BaseVerticle) RunOnEventLoop(task concurrency.Task) error {
+	// Fail-fast: task cannot be nil
+	if task == nil {
+		FailFast(&EventBusError{Code: "INVALID_TASK", Message: "task cannot be nil"})
+	}
 	bv.mu.RLock()
 	eventLoop := bv.eventLoop
 	bv.mu.RUnlock()

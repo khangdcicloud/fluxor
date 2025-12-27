@@ -16,8 +16,9 @@ type boundedMailbox struct {
 // NewBoundedMailbox creates a new bounded mailbox
 // Hides channel creation from callers
 func NewBoundedMailbox(capacity int) Mailbox {
-	if capacity < 1 {
-		capacity = 100 // Default capacity
+	// Fail-fast: capacity must be positive
+	if capacity <= 0 {
+		failFastIf(true, "mailbox capacity must be positive")
 	}
 
 	return &boundedMailbox{
@@ -46,6 +47,10 @@ func (mb *boundedMailbox) Send(msg interface{}) error {
 // Receive implements Mailbox interface
 // Hides channel receive and select statements
 func (mb *boundedMailbox) Receive(ctx context.Context) (interface{}, error) {
+	// Fail-fast: context cannot be nil
+	if ctx == nil {
+		failFastIf(true, "context cannot be nil")
+	}
 	if atomic.LoadInt32(&mb.closed) == 1 {
 		return nil, ErrMailboxClosed
 	}

@@ -23,6 +23,10 @@ func NewBaseRequestContext() *BaseRequestContext {
 
 // Set stores a value in the context
 func (brc *BaseRequestContext) Set(key string, value interface{}) {
+	// Fail-fast: key cannot be empty
+	if key == "" {
+		FailFast(&EventBusError{Code: "INVALID_KEY", Message: "key cannot be empty"})
+	}
 	brc.mu.Lock()
 	defer brc.mu.Unlock()
 	if brc.data == nil {

@@ -30,6 +30,10 @@ func (br *BaseRouter) Name() string {
 
 // SetName sets the router name
 func (br *BaseRouter) SetName(name string) {
+	// Fail-fast: name cannot be empty
+	if name == "" {
+		FailFast(&EventBusError{Code: "INVALID_NAME", Message: "router name cannot be empty"})
+	}
 	br.mu.Lock()
 	defer br.mu.Unlock()
 	br.name = name
