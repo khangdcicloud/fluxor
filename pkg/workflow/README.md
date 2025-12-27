@@ -104,9 +104,12 @@ func main() {
 |------|-------------|--------|
 | `function` | Execute registered function | `function`: function name |
 | `http` | HTTP request | `url`, `method`, `headers`, `body`, `timeout` |
+| `openai` | OpenAI API request | `apiKey`, `model`, `prompt`, `temperature`, `maxTokens` |
+| `ai` | Generic AI API (OpenAI, Cursor, Anthropic) | `provider`, `apiKey`, `model`, `prompt`, `temperature` |
 | `eventbus` | Send to EventBus | `address`, `action` (publish/send/request) |
 | `set` | Set variables | `values`: map of key-value pairs |
 | `code` | Transform data | `transform`: transformation rules |
+| `subworkflow` | Execute nested workflow | `workflowId`, `inputField`, `outputField` |
 
 ### Flow Control Nodes
 
@@ -117,7 +120,9 @@ func main() {
 | `split` | Parallel execution | (uses all `next` nodes) |
 | `merge` | Wait for inputs | `mode`: waitAll/waitAny |
 | `loop` | Iterate array | `items`: field name |
+| `dynamicloop` | Dynamic loop with custom next node | `itemsField`, `nextNode`, `batchSize` |
 | `wait` | Delay | `duration`: e.g., "5s" |
+| `subworkflow` | Execute nested workflow | `workflowId`, `inputField`, `outputField` |
 
 ### Utility Nodes
 
@@ -209,6 +214,258 @@ workflow.RegisterEventTrigger(eventBus, engine, workflow.EventTriggerConfig{
 
 // Trigger from anywhere
 eventBus.Publish("orders.new", orderData)
+```
+
+## Generic AI Node (OpenAI, Cursor, Anthropic, etc.)
+
+The generic AI node supports multiple AI providers including OpenAI, Cursor, Anthropic, and any OpenAI-compatible API.
+
+### Supported Providers
+
+- **openai** - OpenAI API (default)
+- **cursor** - Cursor AI (uses OpenAI-compatible API)
+- **anthropic** - Anthropic Claude API
+- **custom** - Custom provider with custom baseURL
+
+### Configuration
+
+```json
+{
+  "id": "ai-node",
+  "type": "ai",
+  "config": {
+    "provider": "cursor",  // or "openai", "anthropic", "custom"
+    "apiKey": "sk-...",    // Or use $CURSOR_API_KEY env var
+    "baseURL": "https://api.openai.com/v1",  // Optional, provider-specific default
+    "model": "gpt-4",
+    "prompt": "{{ $.input.message }}",
+    "temperature": 0.7,
+    "maxTokens": 2000
+  }
+}
+```
+
+### Cursor Example
+
+```json
+{
+  "id": "cursor-workflow",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "manual",
+      "next": ["cursor"]
+    },
+    {
+      "id": "cursor",
+      "type": "ai",
+      "config": {
+        "provider": "cursor",
+        "model": "gpt-4",
+        "prompt": "{{ $.input.prompt }}",
+        "temperature": 0.7,
+        "maxTokens": 2000
+      },
+      "next": ["format"]
+    }
+  ]
+}
+```
+
+### Environment Variables
+
+- `OPENAI_API_KEY` - For OpenAI provider
+- `CURSOR_API_KEY` - For Cursor provider (or use OPENAI_API_KEY if compatible)
+- `ANTHROPIC_API_KEY` - For Anthropic provider
+
+### Template Syntax
+
+Same as OpenAI node:
+- `{{ field }}` - Access field from input data
+- `{{ $.input.field }}` - Access field with explicit input prefix
+- `{{ $.field }}` - Access root-level field
+- `{{ $.input.nested.field }}` - Access nested fields
+
+## OpenAI Node
+
+The OpenAI node allows you to call OpenAI's API directly from workflows with template support.
+
+### Configuration
+
+```json
+{
+  "id": "openai-node",
+  "type": "openai",
+  "config": {
+    "apiKey": "sk-...",  // Or use $OPENAI_API_KEY env var
+    "model": "gpt-3.5-turbo",
+    "prompt": "{{ $.input.message }}",
+    "temperature": 0.7,
+    "maxTokens": 500
+  }
+}
+```
+
+### Template Syntax
+
+The OpenAI node supports template syntax for dynamic prompts:
+
+- `{{ field }}` - Access field from input data
+- `{{ $.input.field }}` - Access field with explicit input prefix
+- `{{ $.field }}` - Access root-level field
+- `{{ $.input.nested.field }}` - Access nested fields
+
+### Example
+
+```json
+{
+  "id": "chat-workflow",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "manual",
+      "next": ["openai"]
+    },
+    {
+      "id": "openai",
+      "type": "openai",
+      "config": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "You are a helpful assistant. User says: {{ $.input.message }}",
+        "temperature": 0.7,
+        "maxTokens": 500
+      },
+      "next": ["format"]
+    },
+    {
+      "id": "format",
+      "type": "set",
+      "config": {
+        "values": {
+          "success": true
+        }
+      }
+    }
+  ]
+}
+```
+
+### Chat Completions
+
+For chat-based models, use the `messages` config:
+
+```json
+{
+  "id": "openai-chat",
+  "type": "openai",
+  "config": {
+    "model": "gpt-4",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "user",
+        "content": "{{ $.input.question }}"
+      }
+    ],
+    "temperature": 0.7
+  }
+}
+```
+
+## Nested Workflows (Sub-Workflows)
+
+Execute nested workflows from within a workflow for modularity and reusability.
+
+### Configuration
+
+```json
+{
+  "id": "subworkflow-node",
+  "type": "subworkflow",
+  "config": {
+    "workflowId": "data-processing",
+    "inputField": "data",
+    "outputField": "processed_data",
+    "waitForCompletion": true
+  }
+}
+```
+
+### Example
+
+```json
+{
+  "id": "main-workflow",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "manual",
+      "next": ["process"]
+    },
+    {
+      "id": "process",
+      "type": "subworkflow",
+      "config": {
+        "workflowId": "data-processing",
+        "inputField": "items"
+      },
+      "next": ["format"]
+    }
+  ]
+}
+```
+
+## Dynamic Loops
+
+Execute nodes dynamically for each item in an array with custom next node.
+
+### Configuration
+
+```json
+{
+  "id": "dynamic-loop",
+  "type": "dynamicloop",
+  "config": {
+    "itemsField": "items",
+    "nextNode": "process-item",
+    "itemField": "item",
+    "indexField": "index",
+    "batchSize": 5
+  }
+}
+```
+
+### Example
+
+```json
+{
+  "id": "batch-processing",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "manual",
+      "next": ["loop"]
+    },
+    {
+      "id": "loop",
+      "type": "dynamicloop",
+      "config": {
+        "itemsField": "items",
+        "nextNode": "process-item"
+      }
+    },
+    {
+      "id": "process-item",
+      "type": "function",
+      "config": {
+        "function": "processItem"
+      }
+    }
+  ]
+}
 ```
 
 ## Example: Order Processing Pipeline

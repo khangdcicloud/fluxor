@@ -60,6 +60,10 @@ func (v *WorkflowVerticle) Start(ctx core.FluxorContext) error {
 
 	// Register node handlers that require runtime dependencies
 	v.engine.RegisterNodeHandler(NodeTypeHTTP, HTTPNodeHandler)
+	v.engine.RegisterNodeHandler(NodeTypeOpenAI, OpenAINodeHandler)
+	v.engine.RegisterNodeHandler(NodeTypeAI, AINodeHandler) // Generic AI node (supports Cursor, Anthropic, etc.)
+	v.engine.RegisterNodeHandler(NodeTypeSubWorkflow, CreateSubWorkflowHandler(v.engine))
+	v.engine.RegisterNodeHandler(NodeTypeDynamicLoop, DynamicLoopNodeHandler)
 	v.engine.RegisterNodeHandler(NodeTypeEventBus, CreateEventBusHandler(ctx.EventBus()))
 	v.engine.RegisterNodeHandler(NodeTypeFunction, CreateFunctionHandler(v.functionRegistry))
 	v.engine.RegisterNodeHandler(NodeTypeCode, CodeNodeHandler)

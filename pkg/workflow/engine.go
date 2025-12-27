@@ -262,6 +262,9 @@ func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node 
 		}
 	}
 
+	// Add engine to context for sub-workflow nodes
+	nodeCtx = context.WithValue(nodeCtx, "workflow_engine", e)
+
 	// Prepare input
 	nodeInput := &NodeInput{
 		Data:        input,

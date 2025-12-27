@@ -565,6 +565,10 @@ See [`cmd/enterprise/README.md`](cmd/enterprise/README.md) for complete document
 - **[OBSERVABILITY.md](OBSERVABILITY.md)** - Observability guide (logging, metrics, tracing)
 - **[SECURITY.md](SECURITY.md)** - Security guide (authentication, authorization, headers, CORS, rate limiting)
 
+### Operations (Day N)
+
+- **[DAY_N_OPERATIONS.md](DAY_N_OPERATIONS.md)** - Day N operations guide (scaling, troubleshooting, incident response, capacity planning, backup/recovery)
+
 ### Additional Guides
 
 - **[DATABASE_POOLING.md](DATABASE_POOLING.md)** - Database connection pooling guide (HikariCP equivalent)

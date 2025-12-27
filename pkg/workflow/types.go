@@ -60,17 +60,21 @@ const (
 	// Action nodes - perform operations
 	NodeTypeFunction NodeType = "function" // Custom function
 	NodeTypeHTTP     NodeType = "http"     // HTTP request
+	NodeTypeOpenAI   NodeType = "openai"   // OpenAI API request
+	NodeTypeAI       NodeType = "ai"       // Generic AI API (OpenAI, Cursor, Anthropic, etc.)
 	NodeTypeEventBus NodeType = "eventbus" // Send to EventBus
 	NodeTypeSet      NodeType = "set"      // Set variables
 	NodeTypeCode     NodeType = "code"     // Execute code
 
 	// Flow control nodes
-	NodeTypeCondition NodeType = "condition" // If/else branching
-	NodeTypeSplit     NodeType = "split"     // Parallel execution
-	NodeTypeMerge     NodeType = "merge"     // Wait for multiple inputs
-	NodeTypeLoop      NodeType = "loop"      // Iterate over items
-	NodeTypeSwitch    NodeType = "switch"    // Multi-way branching
-	NodeTypeWait      NodeType = "wait"      // Delay execution
+	NodeTypeCondition   NodeType = "condition"   // If/else branching
+	NodeTypeSplit       NodeType = "split"       // Parallel execution
+	NodeTypeMerge       NodeType = "merge"       // Wait for multiple inputs
+	NodeTypeLoop        NodeType = "loop"        // Iterate over items
+	NodeTypeDynamicLoop NodeType = "dynamicloop" // Dynamic loop based on data
+	NodeTypeSwitch      NodeType = "switch"      // Multi-way branching
+	NodeTypeWait        NodeType = "wait"        // Delay execution
+	NodeTypeSubWorkflow NodeType = "subworkflow" // Execute nested workflow
 
 	// Utility nodes
 	NodeTypeNoOp    NodeType = "noop"    // Pass-through
