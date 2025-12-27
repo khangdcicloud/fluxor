@@ -2,6 +2,7 @@
   "nats": {
     "url": "nats://127.0.0.1:4222",
     "prefix": "fluxor.demo"
-  }
+  },
+  "http_addr": "127.0.0.1:8081"
 }
 

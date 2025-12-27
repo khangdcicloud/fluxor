@@ -144,7 +144,7 @@ func CCUBasedConfigWithUtilization(addr string, maxCCU int, utilizationPercent i
 }
 
 // NewFastHTTPServer creates a new fasthttp server with reactor-based handling
-func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTPServer {
+func NewFastHTTPServer(gocmd core.GoCMD, config *FastHTTPServerConfig) *FastHTTPServer {
 	if config == nil {
 		config = DefaultFastHTTPServerConfig(":8080")
 	}
@@ -159,16 +159,16 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 	requestMailbox := concurrency.NewBoundedMailbox(config.MaxQueue)
 
 	// Create Executor for worker pool (hides goroutine creation)
-	// Use vertx context for executor
-	vertxCtx := vertx.Context()
+	// Use gocmd context for executor
+	gocmdCtx := gocmd.Context()
 	executorConfig := concurrency.ExecutorConfig{
 		Workers:   config.Workers,
 		QueueSize: config.MaxQueue,
 	}
-	executor := concurrency.NewExecutor(vertxCtx, executorConfig)
+	executor := concurrency.NewExecutor(gocmdCtx, executorConfig)
 
 	s := &FastHTTPServer{
-		BaseServer:     core.NewBaseServer("fasthttp-server", vertx),
+		BaseServer:     core.NewBaseServer("fasthttp-server", gocmd),
 		router:         router,
 		addr:           config.Addr,
 		requestMailbox: requestMailbox, // Abstracted: hides chan
@@ -187,7 +187,7 @@ func NewFastHTTPServer(vertx core.Vertx, config *FastHTTPServerConfig) *FastHTTP
 			WriteBufferSize:               config.WriteBufferSize,
 			DisableHeaderNamesNormalizing: false,
 			NoDefaultServerHeader:         true,
-			ReduceMemoryUsage:             true,
+			ReduceMemoryUsage:             false, // Must be false when RequestCtx is passed through channels
 		},
 	}
 
@@ -211,8 +211,13 @@ func (s *FastHTTPServer) doStart() error {
 	}
 	// Start request processing workers using Executor (hides goroutine creation)
 	s.startRequestWorkers()
+	s.Logger().Info(fmt.Sprintf("Starting FastHTTP server on %s", s.addr))
 	// Start listening (blocking call)
-	return s.server.ListenAndServe(s.addr)
+	err := s.server.ListenAndServe(s.addr)
+	if err != nil {
+		s.Logger().Error(fmt.Sprintf("FastHTTP server error: %v", err))
+	}
+	return err
 }
 
 // doStop is called by BaseServer.Stop() - implements hook method
@@ -286,39 +291,60 @@ type ServerMetrics struct {
 // Normal capacity is set to target utilization (e.g., 67%), leaving headroom for spikes
 // This prevents system crash by rejecting overflow requests gracefully
 func (s *FastHTTPServer) handleRequest(ctx *fasthttp.RequestCtx) {
+	method := string(ctx.Method())
+	path := string(ctx.Path())
+
+	// Check if GoCMD context is cancelled
+	gocmdCtx := s.GoCMD().Context()
+	select {
+	case <-gocmdCtx.Done():
+		s.Logger().Info(fmt.Sprintf("GoCMD context cancelled: %v", gocmdCtx.Err()))
+		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
+		return
+	default:
+		// Context is still active
+	}
+
 	// Step 1: Check backpressure controller (normal capacity limiting)
 	// Normal capacity = target utilization (e.g., 67% of max)
 	// This ensures system operates at target utilization under normal load
 	if !s.backpressure.TryAcquire() {
 		// Fail-fast: Normal capacity exceeded, reject immediately
 		// This maintains target utilization (e.g., 67%) under normal conditions
+		s.Logger().Info(fmt.Sprintf("backpressure: capacity exceeded for %s %s", method, path))
 		atomic.AddInt64(&s.rejectedRequests, 1)
 		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
 		ctx.SetContentType("application/json")
 		if _, err := ctx.WriteString(`{"error":"capacity_exceeded","message":"Server at normal capacity - backpressure applied","code":"BACKPRESSURE"}`); err != nil {
-			s.Logger().Errorf("failed to write backpressure response: %v", err)
+			s.Logger().Error(fmt.Sprintf("failed to write backpressure response: %v", err))
 		}
 		return
 	}
 
-	// Step 2: Try to queue request using Mailbox abstraction (hides select statement)
-	if err := s.requestMailbox.Send(ctx); err != nil {
-		// Queue full - fail-fast backpressure: return 503 immediately
-		// Release backpressure capacity since we're not processing
-		s.backpressure.Release()
-		atomic.AddInt64(&s.rejectedRequests, 1)
+	// Step 2: Process request synchronously to ensure response is sent correctly
+	// fasthttp requires the handler to complete before sending response
+	// We still use backpressure for rate limiting, but process in same goroutine
+	// Use defer to ensure backpressure is always released, even on panic
+	defer s.backpressure.Release()
 
-		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-		ctx.SetContentType("application/json")
-		if _, err := ctx.WriteString(`{"error":"queue_full","message":"Server overloaded - backpressure applied","code":"BACKPRESSURE"}`); err != nil {
-			s.Logger().Errorf("failed to write queue full response: %v", err)
+	// Process with panic recovery to ensure backpressure is released
+	defer func() {
+		if r := recover(); r != nil {
+			// Handler panic: return 500 error instead of crashing
+			ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+			ctx.SetContentType("application/json")
+			requestID := string(ctx.Request.Header.Peek("X-Request-ID"))
+			if requestID == "" {
+				requestID = "unknown"
+			}
+			s.Logger().Error(fmt.Sprintf("handler panic (request_id=%s): %v", requestID, r))
+			if _, err := ctx.WriteString(fmt.Sprintf(`{"error":"handler_panic","message":"Request handler failed","request_id":"%s"}`, requestID)); err != nil {
+				s.Logger().Error(fmt.Sprintf("failed to write panic response: %v", err))
+			}
 		}
-		return
-	}
+	}()
 
-	// Request queued successfully
-	atomic.AddInt64(&s.queuedRequests, 1)
-	// Note: queuedRequests and backpressure released in worker after processing
+	s.processRequest(ctx)
 }
 
 // SetHandler sets the request handler
@@ -339,7 +365,7 @@ func (s *FastHTTPServer) startRequestWorkers() {
 			)
 			if err := s.executor.Submit(task); err != nil {
 				// Log error but continue
-				s.Logger().Errorf("failed to start worker %d: %v", i, err)
+				s.Logger().Error(fmt.Sprintf("failed to start worker %d: %v", i, err))
 			}
 		}
 	})
@@ -352,7 +378,7 @@ func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 	defer func() {
 		if r := recover(); r != nil {
 			// Log panic but don't re-panic to prevent system crash
-			s.Logger().Errorf("panic in worker (isolated): %v", r)
+			s.Logger().Error(fmt.Sprintf("panic in worker (isolated): %v", r))
 		}
 	}()
 
@@ -368,8 +394,13 @@ func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 		reqCtx, ok := msg.(*fasthttp.RequestCtx)
 		if !ok {
 			// Invalid message type - skip
+			s.Logger().Error(fmt.Sprintf("invalid message type in mailbox: %T", msg))
 			continue
 		}
+
+		method := string(reqCtx.Method())
+		path := string(reqCtx.Path())
+		s.Logger().Info(fmt.Sprintf("worker received request: %s %s", method, path))
 
 		// Decrement queued counter when processing starts
 		atomic.AddInt64(&s.queuedRequests, -1)
@@ -392,9 +423,9 @@ func (s *FastHTTPServer) processRequestFromMailbox(ctx context.Context) error {
 					if requestID == "" {
 						requestID = "unknown"
 					}
-					s.Logger().Errorf("handler panic (request_id=%s): %v", requestID, r)
+					s.Logger().Error(fmt.Sprintf("handler panic (request_id=%s): %v", requestID, r))
 					if _, err := reqCtx.WriteString(fmt.Sprintf(`{"error":"handler_panic","message":"Request handler failed","request_id":"%s"}`, requestID)); err != nil {
-						s.Logger().Errorf("failed to write panic response: %v", err)
+						s.Logger().Error(fmt.Sprintf("failed to write panic response: %v", err))
 					}
 				}
 			}()
@@ -410,8 +441,8 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 	if ctx == nil {
 		panic("request context cannot be nil")
 	}
-	if s.Vertx() == nil {
-		panic("vertx cannot be nil")
+	if s.GoCMD() == nil {
+		panic("gocmd cannot be nil")
 	}
 	if s.router == nil {
 		panic("router cannot be nil")
@@ -423,11 +454,15 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 		requestID = core.GenerateRequestID()
 	}
 
-	// Create request context with Vertx
+	method := string(ctx.Method())
+	path := string(ctx.Path())
+	s.Logger().Info(fmt.Sprintf("processing request: %s %s (request_id=%s)", method, path, requestID))
+
+	// Create request context with GoCMD
 	reqCtx := &FastRequestContext{
 		BaseRequestContext: core.NewBaseRequestContext(),
 		RequestCtx:         ctx,
-		Vertx:              s.Vertx(),
+		GoCMD:              s.GoCMD(),
 		EventBus:           s.EventBus(),
 		Params:             make(map[string]string),
 		requestID:          requestID,
@@ -444,6 +479,13 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 
 	// Track response status
 	statusCode := ctx.Response.StatusCode()
+	bodyLen := len(ctx.Response.Body())
+	s.Logger().Info(fmt.Sprintf("request completed: %s %s -> status=%d body_len=%d (request_id=%s)", method, path, statusCode, bodyLen, requestID))
+
+	if bodyLen == 0 && statusCode == 200 {
+		s.Logger().Info(fmt.Sprintf("response body is empty but status is 200 for %s %s (request_id=%s)", method, path, requestID))
+	}
+
 	if statusCode >= 200 && statusCode < 300 {
 		atomic.AddInt64(&s.successfulRequests, 1)
 	} else if statusCode >= 500 {
@@ -456,7 +498,7 @@ func (s *FastHTTPServer) processRequest(ctx *fasthttp.RequestCtx) {
 type FastRequestContext struct {
 	*core.BaseRequestContext // Embed base context for data storage
 	RequestCtx               *fasthttp.RequestCtx
-	Vertx                    core.Vertx
+	GoCMD                    core.GoCMD
 	EventBus                 core.EventBus
 	Params                   map[string]string
 	requestID                string // Request ID for tracing
@@ -469,6 +511,10 @@ func (c *FastRequestContext) JSON(statusCode int, data interface{}) error {
 		return fmt.Errorf("invalid status code: %d", statusCode)
 	}
 
+	if c.RequestCtx == nil {
+		return fmt.Errorf("RequestCtx is nil")
+	}
+
 	c.RequestCtx.SetStatusCode(statusCode)
 	c.RequestCtx.SetContentType("application/json")
 
@@ -478,8 +524,13 @@ func (c *FastRequestContext) JSON(statusCode int, data interface{}) error {
 		return fmt.Errorf("json encode error: %w", err)
 	}
 
-	if _, err := c.RequestCtx.Write(jsonData); err != nil {
+	n, err := c.RequestCtx.Write(jsonData)
+	if err != nil {
 		return fmt.Errorf("write response error: %w", err)
+	}
+
+	if n != len(jsonData) {
+		return fmt.Errorf("incomplete write: wrote %d of %d bytes", n, len(jsonData))
 	}
 	return nil
 }
@@ -502,10 +553,21 @@ func (c *FastRequestContext) BindJSON(v interface{}) error {
 
 // Text writes text response
 func (c *FastRequestContext) Text(statusCode int, text string) error {
+	if c.RequestCtx == nil {
+		return fmt.Errorf("RequestCtx is nil")
+	}
+
 	c.RequestCtx.SetStatusCode(statusCode)
-	c.RequestCtx.SetContentType("text/plain")
-	if _, err := c.RequestCtx.WriteString(text); err != nil {
+	c.RequestCtx.SetContentType("text/plain; charset=utf-8")
+
+	textBytes := []byte(text)
+	n, err := c.RequestCtx.Write(textBytes)
+	if err != nil {
 		return fmt.Errorf("write text response error: %w", err)
+	}
+
+	if n != len(textBytes) {
+		return fmt.Errorf("incomplete write: wrote %d of %d bytes", n, len(textBytes))
 	}
 	return nil
 }

@@ -39,8 +39,8 @@ func TestClusterEventBusJetStream_PublishAndSend(t *testing.T) {
 	ctx := context.Background()
 
 	// Two services consuming the same "topic" should both receive Publish once.
-	vA := NewVertx(ctx)
-	vB := NewVertx(ctx)
+	vA := NewGoCMD(ctx)
+	vB := NewGoCMD(ctx)
 	defer func() { _ = vA.Close() }()
 	defer func() { _ = vB.Close() }()
 
@@ -98,8 +98,8 @@ func TestClusterEventBusJetStream_PublishAndSend(t *testing.T) {
 	}
 
 	// Send should be load-balanced (delivered once) across two consumers.
-	vW1 := NewVertx(ctx)
-	vW2 := NewVertx(ctx)
+	vW1 := NewGoCMD(ctx)
+	vW2 := NewGoCMD(ctx)
 	defer func() { _ = vW1.Close() }()
 	defer func() { _ = vW2.Close() }()
 
@@ -166,7 +166,7 @@ func TestNewClusterEventBusJetStream_FailFast_InvalidInputs(t *testing.T) {
 	url := s.ClientURL()
 
 	t.Run("nil ctx", func(t *testing.T) {
-		v := NewVertx(context.Background())
+		v := NewGoCMD(context.Background())
 		defer func() { _ = v.Close() }()
 
 		if _, err := NewClusterEventBusJetStream(nil, v, ClusterJetStreamConfig{
@@ -178,18 +178,18 @@ func TestNewClusterEventBusJetStream_FailFast_InvalidInputs(t *testing.T) {
 		}
 	})
 
-	t.Run("nil vertx", func(t *testing.T) {
+		t.Run("nil gocmd", func(t *testing.T) {
 		if _, err := NewClusterEventBusJetStream(context.Background(), nil, ClusterJetStreamConfig{
 			URL:     url,
 			Prefix:  "fluxor.js.failfast",
 			Service: "svc",
 		}); err == nil {
-			t.Fatalf("expected error for nil vertx")
+			t.Fatalf("expected error for nil gocmd")
 		}
 	})
 
 	t.Run("missing service", func(t *testing.T) {
-		v := NewVertx(context.Background())
+		v := NewGoCMD(context.Background())
 		defer func() { _ = v.Close() }()
 
 		if _, err := NewClusterEventBusJetStream(context.Background(), v, ClusterJetStreamConfig{

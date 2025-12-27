@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/fluxorio/fluxor/pkg/core"
 	"github.com/fluxorio/fluxor/pkg/fluxor"
@@ -12,25 +13,52 @@ import (
 )
 
 func main() {
+	logger := core.NewDefaultLogger()
+	logger.Info("Starting all-in-one server...")
+
 	app, err := fluxor.NewMainVerticleWithOptions("config.json", fluxor.MainVerticleOptions{
-		EventBusFactory: func(ctx context.Context, vertx core.Vertx, cfg map[string]any) (core.EventBus, error) {
+		EventBusFactory: func(ctx context.Context, gocmd core.GoCMD, cfg map[string]any) (core.EventBus, error) {
 			natsCfg, _ := cfg["nats"].(map[string]any)
 			url, _ := natsCfg["url"].(string)
 			prefix, _ := natsCfg["prefix"].(string)
-			return core.NewClusterEventBusJetStream(ctx, vertx, core.ClusterJetStreamConfig{
+			eventBus, err := core.NewClusterEventBusJetStream(ctx, gocmd, core.ClusterJetStreamConfig{
 				URL:     url,
 				Prefix:  prefix,
 				Service: "all-in-one",
 			})
+			if err == nil {
+				core.Info(fmt.Sprintf("Connecting to NATS: %s (prefix: %s)", url, prefix))
+			}
+			return eventBus, err
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		logger.Error(fmt.Sprintf("Failed to create main verticle: %v", err))
+		os.Exit(1)
 	}
 
 	// deploy order decision here
-	_, _ = app.DeployVerticle(apigw.NewApiGatewayVerticle())
-	_, _ = app.DeployVerticle(pay.NewPaymentVerticle())
+	logger.Info("Deploying API Gateway verticle...")
+	_, err = app.DeployVerticle(apigw.NewApiGatewayVerticle())
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to deploy API Gateway verticle: %v", err))
+	} else {
+		logger.Info("API Gateway verticle deployed successfully")
+	}
 
-	_ = app.Start()
+	logger.Info("Deploying Payment Service verticle...")
+	_, err = app.DeployVerticle(pay.NewPaymentVerticle())
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to deploy Payment Service verticle: %v", err))
+	} else {
+		logger.Info("Payment Service verticle deployed successfully")
+	}
+
+	logger.Info("Starting application...")
+	if err := app.Start(); err != nil {
+		logger.Error(fmt.Sprintf("Failed to start application: %v", err))
+		os.Exit(1)
+	}
+
+	logger.Info("All-in-one server started successfully!")
 }

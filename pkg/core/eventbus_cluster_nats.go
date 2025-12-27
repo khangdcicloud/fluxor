@@ -35,12 +35,12 @@ type ClusterNATSConfig struct {
 // - Publish: <prefix>.pub.<address>
 // - Send:    <prefix>.send.<address> (queue group: same subject)
 // - Request: <prefix>.req.<address>  (queue group: same subject)
-func NewClusterEventBusNATS(ctx context.Context, vertx Vertx, cfg ClusterNATSConfig) (EventBus, error) {
+func NewClusterEventBusNATS(ctx context.Context, gocmd GoCMD, cfg ClusterNATSConfig) (EventBus, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("ctx cannot be nil")
 	}
-	if vertx == nil {
-		return nil, fmt.Errorf("vertx cannot be nil")
+	if gocmd == nil {
+		return nil, fmt.Errorf("gocmd cannot be nil")
 	}
 
 	url := cfg.URL
@@ -77,7 +77,7 @@ func NewClusterEventBusNATS(ctx context.Context, vertx Vertx, cfg ClusterNATSCon
 
 	return &clusterNATSEventBus{
 		ctx:            ctx,
-		vertx:          vertx,
+		gocmd:          gocmd,
 		nc:             nc,
 		prefix:         prefix,
 		requestTimeout: reqTimeout,
@@ -88,7 +88,7 @@ func NewClusterEventBusNATS(ctx context.Context, vertx Vertx, cfg ClusterNATSCon
 
 type clusterNATSEventBus struct {
 	ctx   context.Context
-	vertx Vertx
+	gocmd GoCMD
 
 	nc *nats.Conn
 
@@ -310,7 +310,7 @@ func (c *clusterNATSConsumer) onMsg(_ string) nats.MsgHandler {
 			},
 		)
 		if err := c.eb.executor.Submit(task); err != nil {
-			c.eb.logger.Warnf("cluster consumer overloaded for %s: %v", c.address, err)
+			c.eb.logger.Info(fmt.Sprintf("cluster consumer overloaded for %s: %v", c.address, err))
 		}
 	}
 }
@@ -328,7 +328,7 @@ func (c *clusterNATSConsumer) handleMsg(nm *nats.Msg) error {
 	if rid := nm.Header.Get("X-Request-ID"); rid != "" {
 		base = WithRequestID(base, rid)
 	}
-	fctx := newFluxorContext(base, c.eb.vertx)
+	fctx := newFluxorContext(base, c.eb.gocmd)
 
 	headers := make(map[string]string)
 	for k, v := range nm.Header {

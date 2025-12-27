@@ -13,7 +13,7 @@ import (
 // ReactorRuntime provides a reactor-based runtime (alternative to Verticle-based)
 // NOTE: This is experimental and uses a different API pattern
 type ReactorRuntime struct {
-	vertx       core.Vertx
+	gocmd       core.GoCMD
 	deployments map[string]Reactor // Registry
 	mu          sync.RWMutex
 	wg          sync.WaitGroup
@@ -29,9 +29,9 @@ type Reactor interface {
 
 func New() *ReactorRuntime {
 	ctx, cancel := context.WithCancel(context.Background())
-	vertx := core.NewVertx(ctx)
+	gocmd := core.NewGoCMD(ctx)
 	return &ReactorRuntime{
-		vertx:       vertx,
+		gocmd:       gocmd,
 		deployments: make(map[string]Reactor),
 		ctx:         ctx,
 		cancel:      cancel,
@@ -40,14 +40,14 @@ func New() *ReactorRuntime {
 
 // EventBus returns the event bus
 func (r *ReactorRuntime) EventBus() core.EventBus {
-	return r.vertx.EventBus()
+	return r.gocmd.EventBus()
 }
 
 func (r *ReactorRuntime) Deploy(reactor Reactor, config map[string]any) string {
 	id := uuid.New().String()
 
-	// Create FluxorContext using vertx
-	fctx := newFluxorContext(r.ctx, r.vertx)
+	// Create FluxorContext using gocmd
+	fctx := newFluxorContext(r.ctx, r.gocmd)
 	if config != nil {
 		for k, v := range config {
 			fctx.SetConfig(k, v)
@@ -111,11 +111,11 @@ func (r *ReactorRuntime) Shutdown() {
 	case <-done:
 		slog.Info("Shutdown graceful complete")
 	case <-time.After(5 * time.Second):
-		slog.Warn("Shutdown timed out")
+		slog.Info("Shutdown timed out")
 	}
 
-	if err := r.vertx.Close(); err != nil {
-		slog.Error("Error closing vertx", "error", err)
+	if err := r.gocmd.Close(); err != nil {
+		slog.Error("Error closing gocmd", "error", err)
 	}
 }
 
@@ -124,11 +124,11 @@ func (r *ReactorRuntime) Shutdown() {
 //
 // Parameters:
 //   - goCtx: the Go context.Context (not FluxorContext)
-//   - vertx: the Vertx instance
-func newFluxorContext(goCtx context.Context, vertx core.Vertx) core.FluxorContext {
+//   - gocmd: the GoCMD instance
+func newFluxorContext(goCtx context.Context, gocmd core.GoCMD) core.FluxorContext {
 	return &fluxorContextWrapper{
 		goCtx:  goCtx,
-		vertx:  vertx,
+		gocmd:  gocmd,
 		config: make(map[string]interface{}),
 	}
 }
@@ -136,18 +136,18 @@ func newFluxorContext(goCtx context.Context, vertx core.Vertx) core.FluxorContex
 // fluxorContextWrapper implements core.FluxorContext for ReactorRuntime
 type fluxorContextWrapper struct {
 	goCtx  context.Context // renamed from 'ctx' for clarity: this is Go's context.Context
-	vertx  core.Vertx
+	gocmd  core.GoCMD
 	config map[string]interface{}
 }
 
 func (c *fluxorContextWrapper) Context() context.Context                { return c.goCtx }
-func (c *fluxorContextWrapper) EventBus() core.EventBus                 { return c.vertx.EventBus() }
-func (c *fluxorContextWrapper) Vertx() core.Vertx                       { return c.vertx }
+func (c *fluxorContextWrapper) EventBus() core.EventBus                 { return c.gocmd.EventBus() }
+func (c *fluxorContextWrapper) GoCMD() core.GoCMD                       { return c.gocmd }
 func (c *fluxorContextWrapper) Config() map[string]interface{}          { return c.config }
 func (c *fluxorContextWrapper) SetConfig(key string, value interface{}) { c.config[key] = value }
 func (c *fluxorContextWrapper) Deploy(verticle core.Verticle) (string, error) {
-	return c.vertx.DeployVerticle(verticle)
+	return c.gocmd.DeployVerticle(verticle)
 }
 func (c *fluxorContextWrapper) Undeploy(deploymentID string) error {
-	return c.vertx.UndeployVerticle(deploymentID)
+	return c.gocmd.UndeployVerticle(deploymentID)
 }

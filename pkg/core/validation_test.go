@@ -78,5 +78,5 @@ func TestFailFast(t *testing.T) {
 		}
 	}()
 
-	FailFast(&Error{Code: "TEST", Message: "test error"})
+	FailFast(&EventBusError{Code: "TEST", Message: "test error"})
 }

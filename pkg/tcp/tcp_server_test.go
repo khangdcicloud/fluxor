@@ -51,7 +51,7 @@ func TestNewTCPServer_FailFast_NilVertxPanics(t *testing.T) {
 	t.Parallel()
 	defer func() {
 		if r := recover(); r == nil {
-			t.Fatalf("expected panic for nil vertx")
+			t.Fatalf("expected panic for nil gocmd")
 		}
 	}()
 	_ = NewTCPServer(nil, DefaultTCPServerConfig(":0"))
@@ -59,8 +59,8 @@ func TestNewTCPServer_FailFast_NilVertxPanics(t *testing.T) {
 
 func TestTCPServer_SetHandler_FailFast_NilPanics(t *testing.T) {
 	t.Parallel()
-	vertx := core.NewVertx(context.Background())
-	s := NewTCPServer(vertx, DefaultTCPServerConfig("127.0.0.1:0"))
+	gocmd := core.NewGoCMD(context.Background())
+	s := NewTCPServer(gocmd, DefaultTCPServerConfig("127.0.0.1:0"))
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatalf("expected panic for nil handler")
@@ -70,14 +70,14 @@ func TestTCPServer_SetHandler_FailFast_NilPanics(t *testing.T) {
 }
 
 func TestTCPServer_StartStop_HandlesConnection(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
+	gocmd := core.NewGoCMD(context.Background())
 	cfg := DefaultTCPServerConfig("127.0.0.1:0")
 	cfg.Workers = 2
 	cfg.MaxQueue = 10
 	cfg.ReadTimeout = 250 * time.Millisecond
 	cfg.WriteTimeout = 250 * time.Millisecond
 
-	s := NewTCPServer(vertx, cfg)
+	s := NewTCPServer(gocmd, cfg)
 
 	var handled int64
 	s.SetHandler(func(ctx *ConnContext) error {
@@ -143,14 +143,14 @@ func TestTCPServer_StartStop_HandlesConnection(t *testing.T) {
 }
 
 func TestTCPServer_FailFast_BackpressureRejectsConnections(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
+	gocmd := core.NewGoCMD(context.Background())
 	cfg := DefaultTCPServerConfig("127.0.0.1:0")
 	cfg.Workers = 1
 	cfg.MaxQueue = 1
 	cfg.ReadTimeout = 2 * time.Second
 	cfg.WriteTimeout = 2 * time.Second
 
-	s := NewTCPServer(vertx, cfg)
+	s := NewTCPServer(gocmd, cfg)
 
 	block := make(chan struct{})
 	s.SetHandler(func(ctx *ConnContext) error {
@@ -222,14 +222,14 @@ func TestTCPServer_FailFast_BackpressureRejectsConnections(t *testing.T) {
 }
 
 func TestTCPServer_FailFast_PanicIsolation(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
+	gocmd := core.NewGoCMD(context.Background())
 	cfg := DefaultTCPServerConfig("127.0.0.1:0")
 	cfg.Workers = 1
 	cfg.MaxQueue = 5
 	cfg.ReadTimeout = 250 * time.Millisecond
 	cfg.WriteTimeout = 250 * time.Millisecond
 
-	s := NewTCPServer(vertx, cfg)
+	s := NewTCPServer(gocmd, cfg)
 
 	var calls int64
 	s.SetHandler(func(ctx *ConnContext) error {
@@ -300,7 +300,7 @@ func TestTCPServer_FailFast_PanicIsolation(t *testing.T) {
 }
 
 func TestTCPServer_MaxConns_FailFastRejects(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
+	gocmd := core.NewGoCMD(context.Background())
 	cfg := DefaultTCPServerConfig("127.0.0.1:0")
 	cfg.Workers = 1
 	cfg.MaxQueue = 10
@@ -308,7 +308,7 @@ func TestTCPServer_MaxConns_FailFastRejects(t *testing.T) {
 	cfg.ReadTimeout = 2 * time.Second
 	cfg.WriteTimeout = 2 * time.Second
 
-	s := NewTCPServer(vertx, cfg)
+	s := NewTCPServer(gocmd, cfg)
 
 	block := make(chan struct{})
 	s.SetHandler(func(ctx *ConnContext) error {
@@ -394,7 +394,7 @@ func TestTCPServer_MaxConns_FailFastRejects(t *testing.T) {
 }
 
 func TestTCPServer_TLS_Works(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
+	gocmd := core.NewGoCMD(context.Background())
 	cfg := DefaultTCPServerConfig("127.0.0.1:0")
 	cfg.Workers = 1
 	cfg.MaxQueue = 10
@@ -402,7 +402,7 @@ func TestTCPServer_TLS_Works(t *testing.T) {
 	cfg.WriteTimeout = 250 * time.Millisecond
 	cfg.TLSConfig = newTestTLSConfig(t)
 
-	s := NewTCPServer(vertx, cfg)
+	s := NewTCPServer(gocmd, cfg)
 
 	var handled int64
 	s.SetHandler(func(ctx *ConnContext) error {

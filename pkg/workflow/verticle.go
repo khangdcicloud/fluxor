@@ -103,7 +103,7 @@ func (v *WorkflowVerticle) Stop(ctx core.FluxorContext) error {
 
 func (v *WorkflowVerticle) startHTTPAPI(ctx core.FluxorContext) error {
 	config := web.DefaultFastHTTPServerConfig(v.httpAddr)
-	v.server = web.NewFastHTTPServer(ctx.Vertx(), config)
+	v.server = web.NewFastHTTPServer(ctx.GoCMD(), config)
 	router := v.server.FastRouter()
 
 	// List workflows

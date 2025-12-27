@@ -43,10 +43,10 @@ func TestRateLimit_PerRouteConfig(t *testing.T) {
 	// full capacity which doesn't match the expected burst=1 behavior.
 	t.Skip("Test requires burst-based rate limiting which is not implemented")
 
-	vertx := core.NewVertx(context.Background())
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(context.Background())
+	defer gocmd.Close()
 
-	server := web.NewFastHTTPServer(vertx, web.DefaultFastHTTPServerConfig(":0"))
+	server := web.NewFastHTTPServer(gocmd, web.DefaultFastHTTPServerConfig(":0"))
 	router := server.FastRouter()
 
 	keyFunc := func(ctx *web.FastRequestContext) string { return "client-1" }
@@ -74,8 +74,8 @@ func TestRateLimit_PerRouteConfig(t *testing.T) {
 		reqCtx := &web.FastRequestContext{
 			BaseRequestContext: core.NewBaseRequestContext(),
 			RequestCtx:         rc,
-			Vertx:              vertx,
-			EventBus:           vertx.EventBus(),
+			GoCMD:              gocmd,
+			EventBus:           gocmd.EventBus(),
 			Params:             make(map[string]string),
 		}
 		router.ServeFastHTTP(reqCtx)

@@ -56,7 +56,7 @@ type RequestContext struct {
 	Context                  context.Context
 	Request                  *http.Request
 	Response                 http.ResponseWriter
-	Vertx                    core.Vertx
+	GoCMD                    core.GoCMD
 	EventBus                 core.EventBus
 	Params                   map[string]string
 }

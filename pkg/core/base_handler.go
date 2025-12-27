@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 // BaseHandler provides a Java-style abstract base class for message handlers
 // It provides common handler patterns and utilities
 type BaseHandler struct {
@@ -49,7 +51,7 @@ func (bh *BaseHandler) Handle(ctx FluxorContext, msg Message) error {
 // This is the actual handler logic
 func (bh *BaseHandler) doHandle(ctx FluxorContext, msg Message) error {
 	// Default implementation - subclasses should override
-	return &Error{Code: "NOT_IMPLEMENTED", Message: "doHandle must be implemented by subclass"}
+	return &EventBusError{Code: "NOT_IMPLEMENTED", Message: "doHandle must be implemented by subclass"}
 }
 
 // Reply is a convenience method to reply to messages
@@ -77,7 +79,7 @@ func (bh *BaseHandler) Fail(msg Message, code int, message string) error {
 		"code":       code,
 		"message":    message,
 		"request_id": requestID,
-	}).Errorf("Handler failed: %s", message)
+	}).Error(fmt.Sprintf("Handler failed: %s", message))
 
 	return msg.Fail(code, message)
 }
@@ -86,7 +88,7 @@ func (bh *BaseHandler) Fail(msg Message, code int, message string) error {
 func (bh *BaseHandler) DecodeBody(msg Message, v interface{}) error {
 	body := msg.Body()
 	if body == nil {
-		return &Error{Code: "EMPTY_BODY", Message: "message body is empty"}
+		return &EventBusError{Code: "EMPTY_BODY", Message: "message body is empty"}
 	}
 
 	// Try JSON decode if body is []byte
@@ -95,7 +97,7 @@ func (bh *BaseHandler) DecodeBody(msg Message, v interface{}) error {
 	}
 
 	// Body is some other type - return error
-	return &Error{Code: "DECODE_ERROR", Message: "failed to decode message body - expected []byte"}
+	return &EventBusError{Code: "DECODE_ERROR", Message: "failed to decode message body - expected []byte"}
 }
 
 // EncodeBody is a convenience method to encode data to JSON

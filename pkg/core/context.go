@@ -8,7 +8,7 @@ import (
 //
 // This is distinct from context.Context (Go's standard context):
 //   - context.Context: Go's cancellation/deadline/value propagation
-//   - FluxorContext: Fluxor's runtime context with access to Vertx, EventBus, Config
+//   - FluxorContext: Fluxor's runtime context with access to GoCMD, EventBus, Config
 //
 // FluxorContext wraps a context.Context and provides additional Fluxor-specific
 // functionality. Use Context() to get the underlying context.Context when needed
@@ -20,8 +20,8 @@ type FluxorContext interface {
 	// EventBus returns the event bus instance
 	EventBus() EventBus
 
-	// Vertx returns the Vertx instance
-	Vertx() Vertx
+	// GoCMD returns the GoCMD instance (kept as GoCMD for backward compatibility)
+	GoCMD() GoCMD
 
 	// Config returns the configuration map
 	Config() map[string]interface{}
@@ -36,10 +36,10 @@ type FluxorContext interface {
 	Undeploy(deploymentID string) error
 }
 
-// vertxContext implements FluxorContext
-type vertxContext struct {
+// gocmdContext implements FluxorContext
+type gocmdContext struct {
 	goCtx  context.Context // renamed from 'ctx' for clarity: this is Go's context.Context
-	vertx  Vertx
+	gocmd  GoCMD
 	config map[string]interface{}
 }
 
@@ -47,49 +47,49 @@ type vertxContext struct {
 // This is an internal function - renamed from 'newContext' for clarity.
 //
 // Parameters:
-//   - goCtx: the Go context.Context to wrap (typically from Vertx.rootCtx)
-//   - vertx: the Vertx instance for accessing EventBus and deploying verticles
-func newFluxorContext(goCtx context.Context, vertx Vertx) FluxorContext {
+//   - goCtx: the Go context.Context to wrap (typically from GoCMD.rootCtx)
+//   - gocmd: the GoCMD instance for accessing EventBus and deploying verticles
+func newFluxorContext(goCtx context.Context, gocmd GoCMD) FluxorContext {
 	if goCtx == nil {
 		// Fail-fast: context cannot be nil
 		panic("context cannot be nil")
 	}
-	return &vertxContext{
+	return &gocmdContext{
 		goCtx:  goCtx,
-		vertx:  vertx,
+		gocmd:  gocmd,
 		config: make(map[string]interface{}),
 	}
 }
 
 // Context returns the underlying context.Context (Go's standard context)
-func (c *vertxContext) Context() context.Context {
+func (c *gocmdContext) Context() context.Context {
 	return c.goCtx
 }
 
-func (c *vertxContext) EventBus() EventBus {
-	if c.vertx == nil {
-		// Fail-fast: vertx is nil
-		panic("vertx is nil, cannot get EventBus")
+func (c *gocmdContext) EventBus() EventBus {
+	if c.gocmd == nil {
+		// Fail-fast: gocmd is nil
+		panic("gocmd is nil, cannot get EventBus")
 	}
-	return c.vertx.EventBus()
+	return c.gocmd.EventBus()
 }
 
-func (c *vertxContext) Vertx() Vertx {
-	return c.vertx
+func (c *gocmdContext) GoCMD() GoCMD {
+	return c.gocmd
 }
 
-func (c *vertxContext) Config() map[string]interface{} {
+func (c *gocmdContext) Config() map[string]interface{} {
 	return c.config
 }
 
-func (c *vertxContext) SetConfig(key string, value interface{}) {
+func (c *gocmdContext) SetConfig(key string, value interface{}) {
 	c.config[key] = value
 }
 
-func (c *vertxContext) Deploy(verticle Verticle) (string, error) {
-	return c.vertx.DeployVerticle(verticle)
+func (c *gocmdContext) Deploy(verticle Verticle) (string, error) {
+	return c.gocmd.DeployVerticle(verticle)
 }
 
-func (c *vertxContext) Undeploy(deploymentID string) error {
-	return c.vertx.UndeployVerticle(deploymentID)
+func (c *gocmdContext) Undeploy(deploymentID string) error {
+	return c.gocmd.UndeployVerticle(deploymentID)
 }

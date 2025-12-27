@@ -5,6 +5,9 @@ import (
 	"fmt"
 )
 
+// JSON is a convenience alias for JSON objects (Dev UX).
+type JSON map[string]any
+
 // JSONEncode encodes a value to JSON bytes (fail-fast).
 // Uses standard encoding/json for JSON encoding.
 // Note: Previously used Sonic for better performance, but switched to stdlib
@@ -12,7 +15,7 @@ import (
 func JSONEncode(v interface{}) ([]byte, error) {
 	// Fail-fast: validate input
 	if v == nil {
-		return nil, &Error{Code: "INVALID_INPUT", Message: "cannot encode nil value"}
+		return nil, &EventBusError{Code: "INVALID_INPUT", Message: "cannot encode nil value"}
 	}
 
 	// Use standard library json.Marshal
@@ -31,10 +34,10 @@ func JSONEncode(v interface{}) ([]byte, error) {
 func JSONDecode(data []byte, v interface{}) error {
 	// Fail-fast: validate inputs
 	if len(data) == 0 {
-		return &Error{Code: "INVALID_INPUT", Message: "cannot decode empty data"}
+		return &EventBusError{Code: "INVALID_INPUT", Message: "cannot decode empty data"}
 	}
 	if v == nil {
-		return &Error{Code: "INVALID_INPUT", Message: "cannot decode into nil value"}
+		return &EventBusError{Code: "INVALID_INPUT", Message: "cannot decode into nil value"}
 	}
 
 	// Use standard library json.Unmarshal

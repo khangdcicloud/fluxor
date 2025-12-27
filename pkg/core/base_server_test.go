@@ -11,8 +11,8 @@ import (
 func TestBaseServer_Start_FailFast_RollbackStartedOnHookError(t *testing.T) {
 	t.Parallel()
 
-	vertx := NewVertx(context.Background())
-	bs := NewBaseServer("test", vertx)
+	gocmd := NewGoCMD(context.Background())
+	bs := NewBaseServer("test", gocmd)
 	bs.SetHooks(
 		func() error { return errors.New("boom") },
 		func() error { return nil },
@@ -27,8 +27,8 @@ func TestBaseServer_Start_FailFast_RollbackStartedOnHookError(t *testing.T) {
 }
 
 func TestBaseServer_Start_BlocksButMarksStarted(t *testing.T) {
-	vertx := NewVertx(context.Background())
-	bs := NewBaseServer("test", vertx)
+	gocmd := NewGoCMD(context.Background())
+	bs := NewBaseServer("test", gocmd)
 
 	release := make(chan struct{})
 	var entered int64

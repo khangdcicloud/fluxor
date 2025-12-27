@@ -12,11 +12,11 @@ import (
 
 func main() {
 	app, err := fluxor.NewMainVerticleWithOptions("config.json", fluxor.MainVerticleOptions{
-		EventBusFactory: func(ctx context.Context, vertx core.Vertx, cfg map[string]any) (core.EventBus, error) {
+		EventBusFactory: func(ctx context.Context, gocmd core.GoCMD, cfg map[string]any) (core.EventBus, error) {
 			natsCfg, _ := cfg["nats"].(map[string]any)
 			url, _ := natsCfg["url"].(string)
 			prefix, _ := natsCfg["prefix"].(string)
-			return core.NewClusterEventBusJetStream(ctx, vertx, core.ClusterJetStreamConfig{
+			return core.NewClusterEventBusJetStream(ctx, gocmd, core.ClusterJetStreamConfig{
 				URL:     url,
 				Prefix:  prefix,
 				Service: "api-gateway",

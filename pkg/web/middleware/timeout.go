@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func Timeout(config TimeoutConfig) web.FastMiddleware {
 				fields["path"] = path
 				fields["timeout"] = config.Timeout.String()
 
-				logger.WithFields(fields).Warnf("Request timeout: %s %s", string(ctx.Method()), path)
+				logger.WithFields(fields).Info(fmt.Sprintf("Request timeout: %s %s", string(ctx.Method()), path))
 
 				ctx.RequestCtx.SetStatusCode(504) // Gateway Timeout
 				ctx.RequestCtx.SetContentType("application/json")

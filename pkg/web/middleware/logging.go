@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func Logging(config LoggingConfig) web.FastMiddleware {
 				fields["path"] = path
 				fields["remote_addr"] = ctx.RequestCtx.RemoteIP().String()
 
-				logger.WithFields(fields).Infof("Request: %s %s", method, path)
+				logger.WithFields(fields).Info(fmt.Sprintf("Request: %s %s", method, path))
 			}
 
 			// Execute handler
@@ -91,13 +92,13 @@ func Logging(config LoggingConfig) web.FastMiddleware {
 
 				if err != nil {
 					fields["error"] = err.Error()
-					logger.WithFields(fields).Errorf("Request failed: %s %s - %d - %v", method, path, statusCode, err)
+					logger.WithFields(fields).Error(fmt.Sprintf("Request failed: %s %s - %d - %v", method, path, statusCode, err))
 				} else if statusCode >= 500 {
-					logger.WithFields(fields).Errorf("Request error: %s %s - %d", method, path, statusCode)
+					logger.WithFields(fields).Error(fmt.Sprintf("Request error: %s %s - %d", method, path, statusCode))
 				} else if statusCode >= 400 {
-					logger.WithFields(fields).Warnf("Request warning: %s %s - %d", method, path, statusCode)
+					logger.WithFields(fields).Info(fmt.Sprintf("Request warning: %s %s - %d", method, path, statusCode))
 				} else {
-					logger.WithFields(fields).Infof("Request completed: %s %s - %d", method, path, statusCode)
+					logger.WithFields(fields).Info(fmt.Sprintf("Request completed: %s %s - %d", method, path, statusCode))
 				}
 			}
 

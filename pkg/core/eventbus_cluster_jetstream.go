@@ -57,12 +57,12 @@ type ClusterJetStreamConfig struct {
 }
 
 // NewClusterEventBusJetStream creates a clustered EventBus backed by NATS JetStream for durability.
-func NewClusterEventBusJetStream(ctx context.Context, vertx Vertx, cfg ClusterJetStreamConfig) (EventBus, error) {
+func NewClusterEventBusJetStream(ctx context.Context, gocmd GoCMD, cfg ClusterJetStreamConfig) (EventBus, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("ctx cannot be nil")
 	}
-	if vertx == nil {
-		return nil, fmt.Errorf("vertx cannot be nil")
+	if gocmd == nil {
+		return nil, fmt.Errorf("gocmd cannot be nil")
 	}
 
 	url := cfg.URL
@@ -127,7 +127,7 @@ func NewClusterEventBusJetStream(ctx context.Context, vertx Vertx, cfg ClusterJe
 
 	eb := &clusterJSEventBus{
 		ctx:            ctx,
-		vertx:          vertx,
+		gocmd:          gocmd,
 		nc:             nc,
 		js:             js,
 		prefix:         prefix,
@@ -150,7 +150,7 @@ func NewClusterEventBusJetStream(ctx context.Context, vertx Vertx, cfg ClusterJe
 
 type clusterJSEventBus struct {
 	ctx   context.Context
-	vertx Vertx
+	gocmd GoCMD
 
 	nc *nats.Conn
 	js nats.JetStreamContext
@@ -304,7 +304,7 @@ func (eb *clusterJSEventBus) Request(address string, body interface{}, timeout t
 		replySubject: "",
 		eb: &clusterNATSEventBus{
 			ctx:            eb.ctx,
-			vertx:          eb.vertx,
+			gocmd:          eb.gocmd,
 			nc:             eb.nc,
 			prefix:         eb.prefix,
 			requestTimeout: eb.requestTimeout,
@@ -401,7 +401,7 @@ func (c *clusterJSConsumer) Handler(handler MessageHandler) Consumer {
 	if err == nil {
 		c.subs = append(c.subs, pubSub)
 	} else {
-		c.eb.logger.Errorf("jetstream subscribe (publish) failed for %s: %v", c.address, err)
+		c.eb.logger.Error(fmt.Sprintf("jetstream subscribe (publish) failed for %s: %v", c.address, err))
 	}
 
 	// Send (work-queue): delivered once to one replica (queue group = address).
@@ -421,7 +421,7 @@ func (c *clusterJSConsumer) Handler(handler MessageHandler) Consumer {
 	if err == nil {
 		c.subs = append(c.subs, sendSub)
 	} else {
-		c.eb.logger.Errorf("jetstream subscribe (send) failed for %s: %v", c.address, err)
+		c.eb.logger.Error(fmt.Sprintf("jetstream subscribe (send) failed for %s: %v", c.address, err))
 	}
 
 	// Request: core NATS request/reply (queue group = subject).
@@ -469,7 +469,7 @@ func (c *clusterJSConsumer) onJSMsg() nats.MsgHandler {
 		)
 		if err := c.eb.executor.Submit(task); err != nil {
 			// Backpressure: keep message unacked to be redelivered.
-			c.eb.logger.Warnf("cluster consumer overloaded for %s: %v", c.address, err)
+			c.eb.logger.Info(fmt.Sprintf("cluster consumer overloaded for %s: %v", c.address, err))
 		}
 	}
 }
@@ -483,7 +483,7 @@ func (c *clusterJSConsumer) onCoreMsg() nats.MsgHandler {
 			},
 		)
 		if err := c.eb.executor.Submit(task); err != nil {
-			c.eb.logger.Warnf("cluster consumer overloaded for %s: %v", c.address, err)
+			c.eb.logger.Info(fmt.Sprintf("cluster consumer overloaded for %s: %v", c.address, err))
 		}
 	}
 }
@@ -500,7 +500,7 @@ func (c *clusterJSConsumer) handleMsg(nm *nats.Msg) error {
 	if rid := nm.Header.Get("X-Request-ID"); rid != "" {
 		base = WithRequestID(base, rid)
 	}
-	fctx := newFluxorContext(base, c.eb.vertx)
+	fctx := newFluxorContext(base, c.eb.gocmd)
 
 	headers := make(map[string]string)
 	for k, v := range nm.Header {
@@ -515,7 +515,7 @@ func (c *clusterJSConsumer) handleMsg(nm *nats.Msg) error {
 		replySubject: nm.Reply,
 		eb: &clusterNATSEventBus{
 			ctx:            c.eb.ctx,
-			vertx:          c.eb.vertx,
+			gocmd:          c.eb.gocmd,
 			nc:             c.eb.nc,
 			prefix:         c.eb.prefix,
 			requestTimeout: c.eb.requestTimeout,

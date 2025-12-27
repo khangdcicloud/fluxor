@@ -31,14 +31,14 @@ type ConnectionHandler func(ctx *ConnContext) error
 // It wraps a ConnectionHandler with extra behavior (auth, metrics, tracing, etc.).
 type Middleware func(next ConnectionHandler) ConnectionHandler
 
-// ConnContext provides per-connection context and convenient access to Vertx/EventBus.
-// Mirrors web.RequestContext's shape (BaseRequestContext + Context + Vertx + EventBus).
+// ConnContext provides per-connection context and convenient access to GoCMD/EventBus.
+// Mirrors web.RequestContext's shape (BaseRequestContext + Context + GoCMD + EventBus).
 type ConnContext struct {
 	*core.BaseRequestContext
 
 	Context  context.Context
 	Conn     net.Conn
-	Vertx    core.Vertx
+	GoCMD    core.GoCMD
 	EventBus core.EventBus
 
 	LocalAddr  net.Addr

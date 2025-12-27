@@ -2,6 +2,7 @@ package concurrency
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -90,8 +91,10 @@ func (e *defaultExecutor) worker(id int) {
 
 			// Execute task
 			if err := task.Execute(e.ctx); err != nil {
-				// Log error but continue processing
-				e.logger.Errorf("task %s failed: %v", task.Name(), err)
+				// Don't log context.Canceled - it's expected during shutdown
+				if !errors.Is(err, context.Canceled) {
+					e.logger.Errorf("task %s failed: %v", task.Name(), err)
+				}
 			}
 			atomic.AddInt64(&e.completedTasks, 1)
 

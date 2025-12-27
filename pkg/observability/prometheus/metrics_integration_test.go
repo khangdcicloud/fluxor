@@ -18,21 +18,21 @@ import (
 
 // TestMetricsEndpoint_Integration tests the /metrics endpoint with real data
 func TestMetricsEndpoint_Integration(t *testing.T) {
-	// Create Vertx and server
+	// Create GoCMD and server
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(ctx)
+	defer gocmd.Close()
 
 	// Deploy a test verticle
 	testVerticle := &TestVerticle{}
-	_, err := vertx.DeployVerticle(testVerticle)
+		_, err := gocmd.DeployVerticle(testVerticle)
 	if err != nil {
 		t.Fatalf("Failed to deploy verticle: %v", err)
 	}
 
 	// Create server with backpressure
 	config := web.CCUBasedConfigWithUtilization(":0", 1000, 67) // Random port
-	server := web.NewFastHTTPServer(vertx, config)
+	server := web.NewFastHTTPServer(gocmd, config)
 
 	// Get router and register metrics endpoint
 	router := server.FastRouter()
@@ -50,8 +50,8 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 		reqCtx := &web.FastRequestContext{
 			BaseRequestContext: core.NewBaseRequestContext(),
 			RequestCtx:         rc,
-			Vertx:              vertx,
-			EventBus:           vertx.EventBus(),
+			GoCMD:              gocmd,
+			EventBus:           gocmd.EventBus(),
 			Params:             make(map[string]string),
 		}
 		router.ServeFastHTTP(reqCtx)
@@ -94,7 +94,7 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 
 	// Update verticle count
 	metrics := prometheus.GetMetrics()
-	metrics.UpdateVerticleCount(vertx.DeploymentCount())
+	metrics.UpdateVerticleCount(gocmd.DeploymentCount())
 
 	// Test 2: Scrape /metrics endpoint
 	t.Run("ScrapeMetrics", func(t *testing.T) {
@@ -255,11 +255,11 @@ func TestMetricsCollection(t *testing.T) {
 // BenchmarkMetricsEndpoint benchmarks the /metrics endpoint
 func BenchmarkMetricsEndpoint(b *testing.B) {
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(ctx)
+	defer gocmd.Close()
 
 	config := web.CCUBasedConfigWithUtilization(":0", 1000, 67)
-	server := web.NewFastHTTPServer(vertx, config)
+	server := web.NewFastHTTPServer(gocmd, config)
 
 	router := server.FastRouter()
 	prometheus.RegisterMetricsEndpoint(router, "/metrics")
@@ -270,8 +270,8 @@ func BenchmarkMetricsEndpoint(b *testing.B) {
 		reqCtx := &web.FastRequestContext{
 			BaseRequestContext: core.NewBaseRequestContext(),
 			RequestCtx:         rc,
-			Vertx:              vertx,
-			EventBus:           vertx.EventBus(),
+			GoCMD:              gocmd,
+			EventBus:           gocmd.EventBus(),
 			Params:             make(map[string]string),
 		}
 		router.ServeFastHTTP(reqCtx)

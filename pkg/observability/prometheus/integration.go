@@ -51,7 +51,7 @@ func UpdateServerMetrics(server *web.FastHTTPServer) {
 		serverMetrics.CurrentCCU,
 		serverMetrics.NormalCCU,
 		serverMetrics.CCUUtilization,
-		server.Vertx().DeploymentCount(),
+		server.GoCMD().DeploymentCount(),
 	)
 }
 

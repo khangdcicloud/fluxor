@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -16,13 +17,30 @@ func TestNewDefaultLogger(t *testing.T) {
 
 	// Test that logger methods don't panic
 	logger.Error("test error")
-	logger.Errorf("test error: %s", "message")
-	logger.Warn("test warning")
-	logger.Warnf("test warning: %s", "message")
+	logger.Error(fmt.Sprintf("test error: %s", "message"))
 	logger.Info("test info")
-	logger.Infof("test info: %s", "message")
+	logger.Info(fmt.Sprintf("test info: %s", "message"))
+	logger.Info("test info")
+	logger.Info(fmt.Sprintf("test info: %s", "message"))
 	logger.Debug("test debug")
-	logger.Debugf("test debug: %s", "message")
+	logger.Debug(fmt.Sprintf("test debug: %s", "message"))
+}
+
+func TestPackageLevelFunctions(t *testing.T) {
+	// Test package-level Error function
+	Error("package level error")
+	Error("package level error: %s", "formatted") //nolint:govet // intentional format string
+
+	// Test package-level Info function
+	Info("package level info")
+	Info("package level info: %s", "formatted") //nolint:govet // intentional format string
+
+	// Test package-level Debug function
+	Debug("package level debug")
+	Debug("package level debug: %s", "formatted") //nolint:govet // intentional format string
+
+	// Test with multiple args (no format specifiers)
+	Info("arg1", "arg2", "arg3")
 }
 
 func TestLoggerWithFields(t *testing.T) {

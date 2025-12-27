@@ -185,7 +185,7 @@ func (v *ApiGateway) Start(ctx core.FluxorContext) error {
 
 	// Create HTTP server
 	config := web.DefaultFastHTTPServerConfig(":8080")
-	v.server = web.NewFastHTTPServer(ctx.Vertx(), config)
+	v.server = web.NewFastHTTPServer(ctx.GoCMD(), config)
 	router := v.server.FastRouter()
 
 	// API endpoints

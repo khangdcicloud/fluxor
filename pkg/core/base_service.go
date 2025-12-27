@@ -44,7 +44,7 @@ func (bs *BaseService) handleRequest(ctx FluxorContext, msg Message) error {
 // doHandleRequest is a hook method for subclasses to implement
 // Default implementation returns error
 func (bs *BaseService) doHandleRequest(ctx FluxorContext, msg Message) error {
-	return &Error{Code: "NOT_IMPLEMENTED", Message: "doHandleRequest must be implemented by subclass"}
+	return &EventBusError{Code: "NOT_IMPLEMENTED", Message: "doHandleRequest must be implemented by subclass"}
 }
 
 // SetRequestHandler sets a custom request handler

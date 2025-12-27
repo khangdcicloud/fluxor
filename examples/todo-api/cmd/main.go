@@ -63,7 +63,7 @@ func main() {
 }
 
 func setupApplication(deps map[reflect.Type]interface{}) error {
-	vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+	vertx := deps[reflect.TypeOf((*core.GoCMD)(nil)).Elem()].(core.GoCMD)
 	dbPool := deps[reflect.TypeOf((*pgxpool.Pool)(nil))].(*pgxpool.Pool)
 
 	// Deploy Verticles

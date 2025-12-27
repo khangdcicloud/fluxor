@@ -12,7 +12,7 @@ import (
 // TestDeploymentState_SyncVerticle tests state transitions for synchronous verticles
 func TestDeploymentState_SyncVerticle(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := &testVerticle{}
@@ -37,7 +37,7 @@ func TestDeploymentState_SyncVerticle(t *testing.T) {
 // TestDeploymentState_SyncVerticleFailure tests state when Start() fails
 func TestDeploymentState_SyncVerticleFailure(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := &failingStartVerticle{}
@@ -105,7 +105,7 @@ func (v *asyncTestVerticle) AsyncStop(ctx FluxorContext, resultHandler func(erro
 // TestDeploymentState_AsyncVerticle_Pending tests that async verticle starts in PENDING state
 func TestDeploymentState_AsyncVerticle_Pending(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	// Use a longer delay to observe PENDING state
@@ -149,7 +149,7 @@ func TestDeploymentState_AsyncVerticle_Pending(t *testing.T) {
 // TestDeploymentState_AsyncVerticle_Failed tests state when AsyncStart fails
 func TestDeploymentState_AsyncVerticle_Failed(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := newAsyncTestVerticle(0)
@@ -183,7 +183,7 @@ func TestDeploymentState_AsyncVerticle_Failed(t *testing.T) {
 // TestDeploymentState_Undeploy_Stopping tests state transitions during undeploy
 func TestDeploymentState_Undeploy_Stopping(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := &testVerticle{}
@@ -211,7 +211,7 @@ func TestDeploymentState_Undeploy_Stopping(t *testing.T) {
 // TestDeploymentState_Undeploy_PendingRejected tests that pending deployments cannot be undeployed
 func TestDeploymentState_Undeploy_PendingRejected(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	// Use a longer delay to keep verticle in PENDING state
@@ -229,7 +229,7 @@ func TestDeploymentState_Undeploy_PendingRejected(t *testing.T) {
 	}
 
 	// Check error type
-	fluxorErr, ok := err.(*Error)
+	fluxorErr, ok := err.(*EventBusError)
 	if !ok {
 		t.Errorf("expected *Error, got %T", err)
 	} else if fluxorErr.Code != "DEPLOYMENT_PENDING" {
@@ -240,7 +240,7 @@ func TestDeploymentState_Undeploy_PendingRejected(t *testing.T) {
 // TestDeploymentState_Undeploy_DoubleUndeploy tests that double undeploy is rejected
 func TestDeploymentState_Undeploy_DoubleUndeploy(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := &testVerticle{}
@@ -265,7 +265,7 @@ func TestDeploymentState_Undeploy_DoubleUndeploy(t *testing.T) {
 // TestDeploymentState_AsyncUndeploy tests async verticle undeploy state transitions
 func TestDeploymentState_AsyncUndeploy(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	verticle := newAsyncTestVerticle(0)
@@ -305,7 +305,7 @@ func TestDeploymentState_AsyncUndeploy(t *testing.T) {
 // TestDeploymentState_ConcurrentDeploy tests concurrent deployments
 func TestDeploymentState_ConcurrentDeploy(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 	defer vx.Close()
 
 	const numDeployments = 10
@@ -386,7 +386,7 @@ func TestDeploymentState_Constants(t *testing.T) {
 // TestDeploymentState_CloseUndeploysAll tests that Close() undeploys all verticles
 func TestDeploymentState_CloseUndeploysAll(t *testing.T) {
 	ctx := context.Background()
-	vx := NewVertx(ctx).(*vertx)
+	vx := NewGoCMD(ctx).(*gocmd)
 
 	verticles := make([]*testVerticle, 5)
 	for i := 0; i < 5; i++ {

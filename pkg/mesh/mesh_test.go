@@ -13,10 +13,10 @@ import (
 
 func TestMeshCall(t *testing.T) {
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	defer vertx.Close()
-	
-	eb := vertx.EventBus()
+	gocmd := core.NewGoCMD(ctx)
+	defer gocmd.Close()
+
+	eb := gocmd.EventBus()
 	mesh := NewServiceMesh(eb)
 
 	// 1. Register a service consumer
@@ -47,10 +47,10 @@ func TestMeshCall(t *testing.T) {
 
 func TestCircuitBreaker(t *testing.T) {
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	mesh := NewServiceMesh(eb)
 
 	serviceName := "failing-service"
@@ -108,10 +108,10 @@ func TestCircuitBreaker(t *testing.T) {
 
 func TestRetries(t *testing.T) {
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	mesh := NewServiceMesh(eb)
 
 	serviceName := "retry-service"

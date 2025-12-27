@@ -1,12 +1,17 @@
 package core
 
 import (
+	"context"
 	"sync"
+	"time"
+
+	"github.com/fluxorio/fluxor/pkg/core/concurrency"
 )
 
 // BaseVerticle provides a Java-style abstract base class for verticles
 // It implements common lifecycle management and provides hook methods for customization
 // Similar to Java's AbstractVerticle pattern
+// Each verticle has its own event loop for sequential event processing
 type BaseVerticle struct {
 	// Name of the verticle (can be set by subclasses)
 	name string
@@ -17,8 +22,12 @@ type BaseVerticle struct {
 	// EventBus reference (cached for convenience)
 	eventBus EventBus
 
-	// Vertx reference (cached for convenience)
-	vertx Vertx
+	// GoCMD reference (cached for convenience) - GoCMD instance
+	gocmd GoCMD
+
+	// Event loop for this verticle (sequential processing)
+	// Each verticle has its own event loop - events are processed sequentially
+	eventLoop concurrency.Executor
 
 	// State management
 	mu      sync.RWMutex
@@ -37,25 +46,30 @@ func NewBaseVerticle(name string) *BaseVerticle {
 	}
 }
 
-// Start implements Verticle.Start with template method pattern
-// Subclasses should override doStart() for custom initialization
+// Start implements Verticle.Start
+// This is the single entry point - subclasses override Start() directly
+// For async operations, use the event loop or implement AsyncVerticle
 func (bv *BaseVerticle) Start(ctx FluxorContext) error {
 	bv.mu.Lock()
 	defer bv.mu.Unlock()
 
 	if bv.started {
-		return &Error{Code: "ALREADY_STARTED", Message: "verticle already started"}
+		return &EventBusError{Code: "ALREADY_STARTED", Message: "verticle already started"}
 	}
 
 	// Set context and references
 	bv.ctx = ctx
 	bv.eventBus = ctx.EventBus()
-	bv.vertx = ctx.Vertx()
+	bv.gocmd = ctx.GoCMD()
 
-	// Call hook method for subclass customization
-	if err := bv.doStart(ctx); err != nil {
-		return err
+	// Create event loop for this verticle (1 worker = sequential processing)
+	// Each verticle has its own event loop - events are processed sequentially
+	gocmdCtx := ctx.GoCMD().Context()
+	eventLoopConfig := concurrency.ExecutorConfig{
+		Workers:   1,    // Single worker = sequential processing (event loop)
+		QueueSize: 1000, // Queue size for events
 	}
+	bv.eventLoop = concurrency.NewExecutor(gocmdCtx, eventLoopConfig)
 
 	bv.started = true
 	return nil
@@ -82,18 +96,26 @@ func (bv *BaseVerticle) Stop(ctx FluxorContext) error {
 	}
 	bv.consumers = nil
 
+	// Shutdown event loop gracefully
+	if bv.eventLoop != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = bv.eventLoop.Shutdown(shutdownCtx)
+		cancel()
+		bv.eventLoop = nil
+	}
+
 	bv.stopped = true
 	return nil
 }
 
-// doStart is a hook method for subclasses to override
-// Default implementation does nothing
+// doStart is deprecated - subclasses should override Start() directly
+// Kept for backward compatibility
 func (bv *BaseVerticle) doStart(ctx FluxorContext) error {
 	return nil
 }
 
-// doStop is a hook method for subclasses to override
-// Default implementation does nothing
+// doStop is deprecated - subclasses should override Stop() directly
+// Kept for backward compatibility
 func (bv *BaseVerticle) doStop(ctx FluxorContext) error {
 	return nil
 }
@@ -119,11 +141,11 @@ func (bv *BaseVerticle) EventBus() EventBus {
 	return bv.eventBus
 }
 
-// Vertx returns the Vertx reference
-func (bv *BaseVerticle) Vertx() Vertx {
+// GoCMD returns the GoCMD reference (kept as GoCMD for backward compatibility)
+func (bv *BaseVerticle) GoCMD() GoCMD {
 	bv.mu.RLock()
 	defer bv.mu.RUnlock()
-	return bv.vertx
+	return bv.gocmd
 }
 
 // IsStarted returns whether the verticle has been started
@@ -162,7 +184,7 @@ func (bv *BaseVerticle) Consumer(address string) Consumer {
 // Publish is a convenience method to publish messages
 func (bv *BaseVerticle) Publish(address string, body interface{}) error {
 	if bv.eventBus == nil {
-		return &Error{Code: "NOT_STARTED", Message: "verticle not started"}
+		return &EventBusError{Code: "NOT_STARTED", Message: "verticle not started"}
 	}
 	return bv.eventBus.Publish(address, body)
 }
@@ -170,7 +192,29 @@ func (bv *BaseVerticle) Publish(address string, body interface{}) error {
 // Send is a convenience method to send messages
 func (bv *BaseVerticle) Send(address string, body interface{}) error {
 	if bv.eventBus == nil {
-		return &Error{Code: "NOT_STARTED", Message: "verticle not started"}
+		return &EventBusError{Code: "NOT_STARTED", Message: "verticle not started"}
 	}
 	return bv.eventBus.Send(address, body)
+}
+
+// EventLoop returns the event loop executor for this verticle
+// Each verticle has its own event loop for sequential event processing
+func (bv *BaseVerticle) EventLoop() concurrency.Executor {
+	bv.mu.RLock()
+	defer bv.mu.RUnlock()
+	return bv.eventLoop
+}
+
+// RunOnEventLoop executes a task on this verticle's event loop
+// Tasks are processed sequentially (single worker)
+func (bv *BaseVerticle) RunOnEventLoop(task concurrency.Task) error {
+	bv.mu.RLock()
+	eventLoop := bv.eventLoop
+	bv.mu.RUnlock()
+
+	if eventLoop == nil {
+		return &EventBusError{Code: "NOT_STARTED", Message: "verticle not started - event loop not available"}
+	}
+
+	return eventLoop.Submit(task)
 }

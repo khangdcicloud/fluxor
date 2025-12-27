@@ -61,12 +61,3 @@ func (p *ValueProvider) Provide() (interface{}, error) {
 	return p.value, nil
 }
 
-// Error represents an FX error
-type Error struct {
-	Message string
-}
-
-func (e *Error) Error() string {
-	return e.Message
-}
-

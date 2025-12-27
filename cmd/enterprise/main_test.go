@@ -287,7 +287,7 @@ func BenchmarkJWTTokenGeneration(b *testing.B) {
 func TestUserServiceVerticle(t *testing.T) {
 	// Create vertx instance
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
+	vertx := core.NewGoCMD(ctx)
 	logger := core.NewDefaultLogger()
 
 	dbConfig := db.PoolConfig{
@@ -328,7 +328,7 @@ func setupTestServer(t *testing.T) (*web.FastHTTPServer, func()) {
 	t.Helper()
 
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
+	vertx := core.NewGoCMD(ctx)
 
 	config := web.CCUBasedConfigWithUtilization(":0", 100, 67) // Random port
 	server := web.NewFastHTTPServer(vertx, config)

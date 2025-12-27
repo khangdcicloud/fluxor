@@ -66,7 +66,7 @@ func TestMainVerticle_DeployVerticle_FailFast_NilVerticle(t *testing.T) {
 
 func TestNewMainVerticleWithOptions_FailFast_EventBusFactoryError(t *testing.T) {
 	_, err := NewMainVerticleWithOptions("", MainVerticleOptions{
-		EventBusFactory: func(ctx context.Context, vertx core.Vertx, cfg map[string]any) (core.EventBus, error) {
+		EventBusFactory: func(ctx context.Context, gocmd core.GoCMD, cfg map[string]any) (core.EventBus, error) {
 			return nil, &core.Error{Code: "TEST", Message: "boom"}
 		},
 	})

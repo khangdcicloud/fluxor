@@ -26,7 +26,7 @@ func NewWorkerVerticle(id string) *WorkerVerticle {
 
 // doStart initializes the worker
 func (v *WorkerVerticle) doStart(ctx core.FluxorContext) error {
-	v.logger.Infof("Worker %s starting...", v.id)
+	v.logger.Info(fmt.Sprintf("Worker %s starting...", v.id))
 
 	// Register consumer with a unique address (for direct addressing if needed)
 	// AND a shared group address if we wanted queue-group style LB (but we are doing manual LB here)
@@ -40,7 +40,7 @@ func (v *WorkerVerticle) doStart(ctx core.FluxorContext) error {
 			return msg.Fail(400, "Invalid body")
 		}
 
-		v.logger.Infof("Worker %s processing job %s", v.id, req.ID)
+		v.logger.Info(fmt.Sprintf("Worker %s processing job %s", v.id, req.ID))
 
 		// Simulate work
 		time.Sleep(100 * time.Millisecond)

@@ -1,5 +1,6 @@
 {
   "http_addr": ":8080",
+  "payment_http_addr": "127.0.0.1:8081",
   "nats": {
     "url": "nats://127.0.0.1:4222",
     "prefix": "fluxor.demo"

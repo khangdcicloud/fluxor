@@ -22,8 +22,8 @@ type Runtime interface {
 	// Deploy deploys a verticle
 	Deploy(verticle core.Verticle) (string, error)
 
-	// Vertx returns the underlying Vertx instance
-	Vertx() core.Vertx
+	// GoCMD returns the underlying GoCMD instance (kept as GoCMD for backward compatibility)
+	GoCMD() core.GoCMD
 }
 
 // Task represents a unit of work that can be executed
@@ -37,7 +37,7 @@ type Task interface {
 
 // runtime implements Runtime
 type runtime struct {
-	vertx  core.Vertx
+	gocmd  core.GoCMD
 	tasks  []Task
 	mu     sync.RWMutex
 	ctx    context.Context
@@ -63,10 +63,10 @@ type StackManager interface {
 // NewRuntime creates a new runtime instance
 func NewRuntime(ctx context.Context) Runtime {
 	ctx, cancel := context.WithCancel(ctx)
-	vertx := core.NewVertx(ctx)
+	gocmd := core.NewGoCMD(ctx)
 
 	return &runtime{
-		vertx:  vertx,
+		gocmd:  gocmd,
 		tasks:  make([]Task, 0),
 		ctx:    ctx,
 		cancel: cancel,
@@ -89,7 +89,7 @@ func (r *runtime) Stop() error {
 	defer r.mu.Unlock()
 
 	r.cancel()
-	return r.vertx.Close()
+	return r.gocmd.Close()
 }
 
 func (r *runtime) Execute(task Task) error {
@@ -100,11 +100,11 @@ func (r *runtime) Execute(task Task) error {
 }
 
 func (r *runtime) Deploy(verticle core.Verticle) (string, error) {
-	return r.vertx.DeployVerticle(verticle)
+	return r.gocmd.DeployVerticle(verticle)
 }
 
-func (r *runtime) Vertx() core.Vertx {
-	return r.vertx
+func (r *runtime) GoCMD() core.GoCMD {
+	return r.gocmd
 }
 
 func (r *runtime) processTasks() {

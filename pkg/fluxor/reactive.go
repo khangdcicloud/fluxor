@@ -277,13 +277,13 @@ func (p *promise) TryFail(err error) bool {
 // ReactiveVerticle is a verticle that uses reactive patterns
 type ReactiveVerticle struct {
 	core.Verticle
-	vertx core.Vertx
+	gocmd core.GoCMD
 }
 
 // NewReactiveVerticle creates a new reactive verticle
-func NewReactiveVerticle(vertx core.Vertx) *ReactiveVerticle {
+func NewReactiveVerticle(gocmd core.GoCMD) *ReactiveVerticle {
 	return &ReactiveVerticle{
-		vertx: vertx,
+		gocmd: gocmd,
 	}
 }
 
@@ -292,7 +292,7 @@ func (rv *ReactiveVerticle) ExecuteReactive(ctx context.Context, address string,
 	promise := NewPromise()
 
 	// Send request via event bus
-	msg, err := rv.vertx.EventBus().Request(address, data, 5*time.Second)
+	msg, err := rv.gocmd.EventBus().Request(address, data, 5*time.Second)
 	if err != nil {
 		promise.Fail(err)
 		return promise

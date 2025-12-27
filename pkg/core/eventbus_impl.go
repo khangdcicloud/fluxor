@@ -13,10 +13,10 @@ import (
 // eventBus implements EventBus
 //
 // Ownership and circular reference:
-//   - eventBus is OWNED BY Vertx (created in NewVertx, closed in Vertx.Close)
-//   - eventBus REFERENCES Vertx (to create FluxorContext for message handlers)
-//   - This circular reference (vertx → eventBus → vertx) is intentional
-//   - Both are cleaned up together in Vertx.Close(), no memory leak
+//   - eventBus is OWNED BY GoCMD (created in NewGoCMD, closed in GoCMD.Close)
+//   - eventBus REFERENCES GoCMD (to create FluxorContext for message handlers)
+//   - This circular reference (gocmd → eventBus → gocmd) is intentional
+//   - Both are cleaned up together in GoCMD.Close(), no memory leak
 //
 // Thread-safety:
 //   - mu protects the consumers map
@@ -26,15 +26,15 @@ import (
 type eventBus struct {
 	consumers map[string][]*consumer
 	mu        sync.RWMutex
-	ctx       context.Context      // derived from vertx.rootCtx via WithCancel
+	ctx       context.Context      // derived from gocmd.rootCtx via WithCancel
 	cancel    context.CancelFunc   // cancels ctx; called in Close() (redundant but defense-in-depth)
-	vertx     Vertx                // back-reference to Vertx for creating FluxorContext (circular ref)
+	gocmd     GoCMD                // back-reference to GoCMD for creating FluxorContext (circular ref)
 	executor  concurrency.Executor // Executor for processing messages (hides goroutines)
 	logger    Logger               // Logger for error and debug messages
 }
 
 // NewEventBus creates a new event bus
-func NewEventBus(ctx context.Context, vertx Vertx) EventBus {
+func NewEventBus(ctx context.Context, gocmd GoCMD) EventBus {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Create logger
@@ -51,7 +51,7 @@ func NewEventBus(ctx context.Context, vertx Vertx) EventBus {
 		consumers: make(map[string][]*consumer),
 		ctx:       ctx,
 		cancel:    cancel,
-		vertx:     vertx,
+		gocmd:     gocmd,
 		executor:  executor,
 		logger:    logger,
 	}
@@ -121,7 +121,7 @@ func (eb *eventBus) Send(address string, body interface{}) error {
 
 	// Fail-fast: no handlers registered
 	if len(consumers) == 0 {
-		return &Error{Code: "NO_HANDLERS", Message: "No handlers registered for address: " + address}
+		return &EventBusError{Code: "NO_HANDLERS", Message: "No handlers registered for address: " + address}
 	}
 
 	// Round-robin to one consumer
@@ -175,7 +175,7 @@ func (eb *eventBus) Request(address string, body interface{}, timeout time.Durat
 		// Use Mailbox abstraction (hides channel send)
 		if err := replyMailbox.Send(msg); err != nil {
 			// Log if mailbox full (non-blocking) - this indicates reply arrived but couldn't be delivered
-			eb.logger.Warnf("reply mailbox full for address %s: %v", replyAddress, err)
+			eb.logger.Info(fmt.Sprintf("reply mailbox full for address %s: %v", replyAddress, err))
 		}
 		return nil
 	})
@@ -197,7 +197,7 @@ func (eb *eventBus) Request(address string, body interface{}, timeout time.Durat
 
 	// Fail-fast: no handlers registered
 	if len(consumers) == 0 {
-		return nil, &Error{Code: "NO_HANDLERS", Message: "No handlers registered for address: " + address}
+		return nil, &EventBusError{Code: "NO_HANDLERS", Message: "No handlers registered for address: " + address}
 	}
 
 	consumer := consumers[0]
@@ -242,10 +242,10 @@ func (eb *eventBus) Consumer(address string) Consumer {
 	defer eb.mu.Unlock()
 
 	// Initialize fluxorCtx when creating consumer
-	// Create FluxorContext for the consumer using eventBus's Vertx reference
+	// Create FluxorContext for the consumer using eventBus's GoCMD reference
 	var fluxorCtx FluxorContext
-	if eb.vertx != nil {
-		fluxorCtx = newFluxorContext(eb.ctx, eb.vertx)
+	if eb.gocmd != nil {
+		fluxorCtx = newFluxorContext(eb.ctx, eb.gocmd)
 	}
 
 	c := &consumer{
@@ -267,7 +267,7 @@ func (eb *eventBus) Close() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := eb.executor.Shutdown(shutdownCtx); err != nil {
-		eb.logger.Warnf("EventBus executor shutdown timeout: %v", err)
+		eb.logger.Info(fmt.Sprintf("EventBus executor shutdown timeout: %v", err))
 	}
 
 	eb.mu.Lock()
@@ -298,7 +298,7 @@ type consumer struct {
 func (c *consumer) Handler(handler MessageHandler) Consumer {
 	// Fail-fast: handler cannot be nil
 	if handler == nil {
-		FailFast(&Error{Code: "INVALID_HANDLER", Message: "handler cannot be nil"})
+		FailFast(&EventBusError{Code: "INVALID_HANDLER", Message: "handler cannot be nil"})
 	}
 
 	c.mu.Lock()
@@ -313,7 +313,7 @@ func (c *consumer) Handler(handler MessageHandler) Consumer {
 		},
 	)
 	if err := c.eventBus.executor.Submit(task); err != nil {
-		c.eventBus.logger.Errorf("Failed to submit consumer task for address %s: %v", c.address, err)
+		c.eventBus.logger.Error(fmt.Sprintf("Failed to submit consumer task for address %s: %v", c.address, err))
 		// Close done channel since processing won't start
 		close(c.done)
 		// Still return consumer - handler can be set later
@@ -327,7 +327,7 @@ func (c *consumer) processMessages(ctx context.Context) error {
 	defer func() {
 		if r := recover(); r != nil {
 			// Log panic but don't re-panic - maintain panic isolation
-			c.eventBus.logger.Errorf("panic in message processing loop for address %s (isolated): %v", c.address, r)
+			c.eventBus.logger.Error(fmt.Sprintf("panic in message processing loop for address %s (isolated): %v", c.address, r))
 		}
 		// Close done channel to notify Completion() when mailbox processing stops
 		close(c.done)
@@ -346,7 +346,7 @@ func (c *consumer) processMessages(ctx context.Context) error {
 		message, ok := msg.(Message)
 		if !ok {
 			// Invalid message type - skip
-			c.eventBus.logger.Warnf("Invalid message type received for address %s", c.address)
+			c.eventBus.logger.Info(fmt.Sprintf("Invalid message type received for address %s", c.address))
 			continue
 		}
 
@@ -355,8 +355,8 @@ func (c *consumer) processMessages(ctx context.Context) error {
 			fluxorCtx := c.ctx
 			if fluxorCtx == nil {
 			// Fallback: create context if somehow nil (shouldn't happen after fix)
-			if c.eventBus.vertx != nil {
-				fluxorCtx = newFluxorContext(c.eventBus.ctx, c.eventBus.vertx)
+			if c.eventBus.gocmd != nil {
+				fluxorCtx = newFluxorContext(c.eventBus.ctx, c.eventBus.gocmd)
 			}
 			}
 
@@ -365,7 +365,7 @@ func (c *consumer) processMessages(ctx context.Context) error {
 				defer func() {
 					if r := recover(); r != nil {
 						// Log handler panic but don't crash - maintain panic isolation
-						c.eventBus.logger.Errorf("handler panic for address %s (isolated): %v", c.address, r)
+						c.eventBus.logger.Error(fmt.Sprintf("handler panic for address %s (isolated): %v", c.address, r))
 					}
 				}()
 
@@ -380,15 +380,15 @@ func (c *consumer) processMessages(ctx context.Context) error {
 						}
 					}
 					if requestID != "" {
-						c.eventBus.logger.Errorf("handler error for address %s (request_id=%s): %v", c.address, requestID, err)
+						c.eventBus.logger.Error(fmt.Sprintf("handler error for address %s (request_id=%s): %v", c.address, requestID, err))
 					} else {
-						c.eventBus.logger.Errorf("handler error for address %s: %v", c.address, err)
+						c.eventBus.logger.Error(fmt.Sprintf("handler error for address %s: %v", c.address, err))
 					}
 				}
 			}()
 		} else {
 			// Handler is nil - log but don't panic (shouldn't happen in normal flow)
-			c.eventBus.logger.Warnf("handler is nil for address %s", c.address)
+			c.eventBus.logger.Info(fmt.Sprintf("handler is nil for address %s", c.address))
 		}
 	}
 }

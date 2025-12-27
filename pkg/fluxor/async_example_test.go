@@ -90,8 +90,8 @@ func ExampleCatch() {
 func ExampleRequestAsync() {
 	// Setup EventBus
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	eventBus := vertx.EventBus()
+	gocmd := core.NewGoCMD(ctx)
+	eventBus := gocmd.EventBus()
 
 	// Register handler
 	consumer := eventBus.Consumer("service.address")
@@ -194,8 +194,8 @@ func ExampleRace() {
 func ExampleRequestAsync_combined() {
 	// Vert.x style: EventBus request-reply
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
-	eventBus := vertx.EventBus()
+	gocmd := core.NewGoCMD(ctx)
+	eventBus := gocmd.EventBus()
 
 	// Register service handler
 	consumer := eventBus.Consumer("user.service")

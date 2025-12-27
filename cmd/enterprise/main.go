@@ -171,7 +171,7 @@ func loadConfig() (*AppConfig, error) {
 }
 
 func setupEnterpriseApplication(deps map[reflect.Type]interface{}, cfg *AppConfig, logger core.Logger) error {
-	vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+	vertx := deps[reflect.TypeOf((*core.GoCMD)(nil)).Elem()].(core.GoCMD)
 	eventBus := vertx.EventBus()
 
 	// 1. Setup OpenTelemetry Tracing

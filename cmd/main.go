@@ -53,12 +53,12 @@ func main() {
 
 // setupApplication initializes the application components
 func setupApplication(deps map[reflect.Type]interface{}) error {
-	vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+	gocmd := deps[reflect.TypeOf((*core.GoCMD)(nil)).Elem()].(core.GoCMD)
 	eventBus := deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()].(core.EventBus)
 
 	// Deploy example verticle
 	verticle := &ExampleVerticle{eventBus: eventBus}
-	deploymentID, err := vertx.DeployVerticle(verticle)
+	deploymentID, err := gocmd.DeployVerticle(verticle)
 	if err != nil {
 		return fmt.Errorf("failed to deploy verticle: %w", err)
 	}
@@ -76,7 +76,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 	log.Printf("Server configured: max=%d CCU, normal=%d CCU (%.0f%% utilization), workers=%d, queue=%d",
 		maxCCU, normalCapacity, float64(utilizationPercent), config.Workers, config.MaxQueue)
 
-	server := web.NewFastHTTPServer(vertx, config)
+	server := web.NewFastHTTPServer(gocmd, config)
 
 	// Setup routes with JSON as default using fast router
 	router := server.FastRouter()
@@ -137,9 +137,9 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 	router.GETFast("/ready", func(ctx *web.FastRequestContext) error {
 		metrics := server.Metrics()
 		// Consider ready if queue utilization is below 90% and backpressure not active
-		// Also check vertx deployment count > 0 (example check)
-		vertx := ctx.Vertx
-		ready := metrics.QueueUtilization < 90.0 && metrics.CCUUtilization < 90.0 && vertx.DeploymentCount() > 0
+		// Also check gocmd deployment count > 0 (example check)
+		gocmd := ctx.GoCMD
+		ready := metrics.QueueUtilization < 90.0 && metrics.CCUUtilization < 90.0 && gocmd.DeploymentCount() > 0
 		statusCode := 200
 		status := "ready"
 		if !ready {
@@ -151,7 +151,7 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 			"ready":             ready,
 			"queue_utilization": metrics.QueueUtilization,
 			"ccu_utilization":   metrics.CCUUtilization,
-			"verticle_count":    vertx.DeploymentCount(),
+			"verticle_count":    gocmd.DeploymentCount(),
 		})
 	})
 
@@ -194,8 +194,8 @@ func setupApplication(deps map[reflect.Type]interface{}) error {
 	server.SetHandler(func(ctx *fasthttp.RequestCtx) {
 		reqCtx := &web.FastRequestContext{
 			RequestCtx: ctx,
-			Vertx:      vertx,
-			EventBus:   vertx.EventBus(),
+			GoCMD:      gocmd,
+			EventBus:   gocmd.EventBus(),
 			Params:     make(map[string]string),
 		}
 		router.ServeFastHTTP(reqCtx)

@@ -28,10 +28,10 @@ func ExampleBaseVerticle() {
 	// }
 
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
+	gocmd := core.NewGoCMD(ctx)
 
 	// Deploy verticle
-	vertx.DeployVerticle(verticle)
+	gocmd.DeployVerticle(verticle)
 }
 
 // ExampleBaseService demonstrates using BaseService (Java-style service pattern)
@@ -57,10 +57,10 @@ func ExampleBaseService() {
 	// }
 
 	ctx := context.Background()
-	vertx := core.NewVertx(ctx)
+	gocmd := core.NewGoCMD(ctx)
 
 	// Deploy service
-	vertx.DeployVerticle(service)
+	gocmd.DeployVerticle(service)
 }
 
 // ExampleBaseHandler demonstrates using BaseHandler (Java-style handler pattern)

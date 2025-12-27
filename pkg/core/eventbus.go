@@ -80,7 +80,7 @@ func (m *message) Reply(body interface{}) error {
 func (m *message) DecodeBody(v interface{}) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	if data, ok := m.body.([]byte); ok {
 		return JSONDecode(data, v)
 	}
@@ -159,16 +159,16 @@ type MessageHandler func(ctx FluxorContext, msg Message) error
 
 // Errors
 var (
-	ErrNoReplyAddress = &Error{Code: "NO_REPLY_ADDRESS", Message: "No reply address available"}
-	ErrTimeout        = &Error{Code: "TIMEOUT", Message: "Request timeout"}
+	ErrNoReplyAddress = &EventBusError{Code: "NO_REPLY_ADDRESS", Message: "No reply address available"}
+	ErrTimeout        = &EventBusError{Code: "TIMEOUT", Message: "Request timeout"}
 )
 
-// Error represents an event bus error
-type Error struct {
+// EventBusError represents an event bus error
+type EventBusError struct {
 	Code    string
 	Message string
 }
 
-func (e *Error) Error() string {
+func (e *EventBusError) Error() string {
 	return e.Message
 }

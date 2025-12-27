@@ -42,7 +42,7 @@ func Recovery(config RecoveryConfig) web.FastMiddleware {
 					fields["path"] = string(ctx.Path())
 					fields["panic"] = r
 
-					logger.WithFields(fields).Errorf("Panic recovered: %v", r)
+					logger.WithFields(fields).Error(fmt.Sprintf("Panic recovered: %v", r))
 
 					// Return 500 error
 					ctx.RequestCtx.SetStatusCode(500)

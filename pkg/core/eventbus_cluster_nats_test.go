@@ -36,9 +36,9 @@ func TestClusterEventBusNATS_PublishSendRequest(t *testing.T) {
 
 	ctx := context.Background()
 
-	v, err := NewVertxWithOptions(ctx, VertxOptions{
-		EventBusFactory: func(ctx context.Context, vertx Vertx) (EventBus, error) {
-			return NewClusterEventBusNATS(ctx, vertx, ClusterNATSConfig{
+	v, err := NewGoCMDWithOptions(ctx, GoCMDOptions{
+		EventBusFactory: func(ctx context.Context, gocmd GoCMD) (EventBus, error) {
+			return NewClusterEventBusNATS(ctx, gocmd, ClusterNATSConfig{
 				URL:            url,
 				Prefix:         "fluxor.test",
 				RequestTimeout: 2 * time.Second,
@@ -164,7 +164,7 @@ func TestNewClusterEventBusNATS_FailFast_InvalidInputs(t *testing.T) {
 	s := runTestNATSServer(t)
 	url := s.ClientURL()
 
-	v := NewVertx(context.Background())
+	v := NewGoCMD(context.Background())
 	defer func() { _ = v.Close() }()
 
 	t.Run("nil ctx", func(t *testing.T) {
@@ -173,9 +173,9 @@ func TestNewClusterEventBusNATS_FailFast_InvalidInputs(t *testing.T) {
 		}
 	})
 
-	t.Run("nil vertx", func(t *testing.T) {
+		t.Run("nil gocmd", func(t *testing.T) {
 		if _, err := NewClusterEventBusNATS(context.Background(), nil, ClusterNATSConfig{URL: url}); err == nil {
-			t.Fatalf("expected error for nil vertx")
+			t.Fatalf("expected error for nil gocmd")
 		}
 	})
 }

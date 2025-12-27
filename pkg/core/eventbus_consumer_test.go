@@ -8,10 +8,10 @@ import (
 
 func TestConsumer_Completion(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	consumer := eb.Consumer("test.address")
@@ -46,10 +46,10 @@ func TestConsumer_Completion(t *testing.T) {
 
 func TestConsumer_MultipleConsumers(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Create multiple consumers for same address
@@ -90,10 +90,10 @@ func TestConsumer_MultipleConsumers(t *testing.T) {
 
 func TestConsumer_RequestIDPropagation(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Add request ID to context
@@ -101,7 +101,7 @@ func TestConsumer_RequestIDPropagation(t *testing.T) {
 	ctxWithID := WithRequestID(ctx, requestID)
 
 	// Create event bus with context that has request ID
-	ebWithID := NewEventBus(ctxWithID, vertx)
+	ebWithID := NewEventBus(ctxWithID, gocmd)
 	defer ebWithID.Close()
 
 	// Use channel for safe communication between goroutines

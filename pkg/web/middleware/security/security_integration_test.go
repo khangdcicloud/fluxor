@@ -11,10 +11,10 @@ import (
 
 func TestSecurityMiddleware(t *testing.T) {
 	// Create a test server context
-	vertx := core.NewVertx(context.Background())
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(context.Background())
+	defer gocmd.Close()
 	config := web.CCUBasedConfigWithUtilization(":8080", 1000, 67)
-	server := web.NewFastHTTPServer(vertx, config)
+	server := web.NewFastHTTPServer(gocmd, config)
 	router := server.FastRouter()
 
 	// Test that middleware functions are created (they return FastMiddleware)

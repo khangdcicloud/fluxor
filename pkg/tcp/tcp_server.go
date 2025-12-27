@@ -84,7 +84,7 @@ func DefaultTCPServerConfig(addr string) *TCPServerConfig {
 }
 
 // NewTCPServer creates a new TCP server.
-func NewTCPServer(vertx core.Vertx, config *TCPServerConfig) *TCPServer {
+func NewTCPServer(gocmd core.GoCMD, config *TCPServerConfig) *TCPServer {
 	if config == nil {
 		config = DefaultTCPServerConfig(":9000")
 	}
@@ -109,13 +109,13 @@ func NewTCPServer(vertx core.Vertx, config *TCPServerConfig) *TCPServer {
 
 	normalCapacity := config.MaxQueue + config.Workers
 	connMailbox := concurrency.NewBoundedMailbox(config.MaxQueue)
-	executor := concurrency.NewExecutor(vertx.Context(), concurrency.ExecutorConfig{
+	executor := concurrency.NewExecutor(gocmd.Context(), concurrency.ExecutorConfig{
 		Workers:   config.Workers,
 		QueueSize: config.MaxQueue,
 	})
 
 	s := &TCPServer{
-		BaseServer:   core.NewBaseServer("tcp-server", vertx),
+		BaseServer:   core.NewBaseServer("tcp-server", gocmd),
 		addr:         config.Addr,
 		config:       config,
 		connMailbox:  connMailbox,
@@ -343,7 +343,7 @@ func (s *TCPServer) startConnWorkers() {
 				},
 			)
 			if err := s.executor.Submit(task); err != nil {
-				s.Logger().Errorf("failed to start tcp worker %d: %v", i, err)
+				s.Logger().Error(fmt.Sprintf("failed to start tcp worker %d: %v", i, err))
 			}
 		}
 	})
@@ -378,7 +378,7 @@ func (s *TCPServer) processConnFromMailbox(ctx context.Context) error {
 			BaseRequestContext: core.NewBaseRequestContext(),
 			Context:            ctx,
 			Conn:               conn,
-			Vertx:              s.Vertx(),
+			GoCMD:              s.GoCMD(),
 			EventBus:           s.EventBus(),
 			LocalAddr:          conn.LocalAddr(),
 			RemoteAddr:         conn.RemoteAddr(),
@@ -391,12 +391,12 @@ func (s *TCPServer) processConnFromMailbox(ctx context.Context) error {
 			defer func() {
 				if r := recover(); r != nil {
 					atomic.AddInt64(&s.errorConnections, 1)
-					s.Logger().Errorf("panic in tcp handler (isolated): %v", r)
+					s.Logger().Error(fmt.Sprintf("panic in tcp handler (isolated): %v", r))
 				}
 			}()
 			if err := h(cctx); err != nil {
 				atomic.AddInt64(&s.errorConnections, 1)
-				s.Logger().Errorf("tcp handler error: %v", err)
+				s.Logger().Error(fmt.Sprintf("tcp handler error: %v", err))
 			}
 		}()
 

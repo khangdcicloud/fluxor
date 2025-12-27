@@ -22,20 +22,20 @@ func (v *testVerticle) Stop(ctx FluxorContext) error {
 	return nil
 }
 
-func TestVertx_DeployVerticle(t *testing.T) {
+func TestGoCMD_DeployVerticle(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
 	// Test fail-fast: nil verticle
-	_, err := vertx.DeployVerticle(nil)
+	_, err := gocmd.DeployVerticle(nil)
 	if err == nil {
 		t.Error("DeployVerticle() with nil verticle should fail")
 	}
 
 	// Test valid deployment
 	verticle := &testVerticle{}
-	deploymentID, err := vertx.DeployVerticle(verticle)
+	deploymentID, err := gocmd.DeployVerticle(verticle)
 	if err != nil {
 		t.Errorf("DeployVerticle() error = %v", err)
 	}
@@ -47,31 +47,31 @@ func TestVertx_DeployVerticle(t *testing.T) {
 	}
 }
 
-func TestVertx_UndeployVerticle(t *testing.T) {
+func TestGoCMD_UndeployVerticle(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
 	// Test fail-fast: empty deployment ID
-	err := vertx.UndeployVerticle("")
+	err := gocmd.UndeployVerticle("")
 	if err == nil {
 		t.Error("UndeployVerticle() with empty ID should fail")
 	}
 
 	// Test fail-fast: non-existent deployment
-	err = vertx.UndeployVerticle("non-existent")
+	err = gocmd.UndeployVerticle("non-existent")
 	if err == nil {
 		t.Error("UndeployVerticle() with non-existent ID should fail")
 	}
 
 	// Deploy and undeploy
 	verticle := &testVerticle{}
-	deploymentID, err := vertx.DeployVerticle(verticle)
+	deploymentID, err := gocmd.DeployVerticle(verticle)
 	if err != nil {
 		t.Fatalf("DeployVerticle() error = %v", err)
 	}
 
-	err = vertx.UndeployVerticle(deploymentID)
+	err = gocmd.UndeployVerticle(deploymentID)
 	if err != nil {
 		t.Errorf("UndeployVerticle() error = %v", err)
 	}
@@ -80,34 +80,34 @@ func TestVertx_UndeployVerticle(t *testing.T) {
 	}
 }
 
-func TestVertx_EventBus(t *testing.T) {
+func TestGoCMD_EventBus(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	eb := vertx.EventBus()
+	eb := gocmd.EventBus()
 	if eb == nil {
 		t.Error("EventBus() should not return nil")
 	}
 }
 
-func TestNewVertxWithOptions_FailFast_EventBusFactoryErrorCancelsContext(t *testing.T) {
+func TestNewGoCMDWithOptions_FailFast_EventBusFactoryErrorCancelsContext(t *testing.T) {
 	parent := context.Background()
 
 	wantErr := errors.New("factory failed")
 	var factoryCtx context.Context
 
-	vx, err := NewVertxWithOptions(parent, VertxOptions{
-		EventBusFactory: func(ctx context.Context, _ Vertx) (EventBus, error) {
+	vx, err := NewGoCMDWithOptions(parent, GoCMDOptions{
+		EventBusFactory: func(ctx context.Context, _ GoCMD) (EventBus, error) {
 			factoryCtx = ctx
 			return nil, wantErr
 		},
 	})
 	if err == nil {
-		t.Fatalf("NewVertxWithOptions() expected error, got nil (vx=%v)", vx)
+		t.Fatalf("NewGoCMDWithOptions() expected error, got nil (vx=%v)", vx)
 	}
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("NewVertxWithOptions() error = %v, want %v", err, wantErr)
+		t.Fatalf("NewGoCMDWithOptions() error = %v, want %v", err, wantErr)
 	}
 	if factoryCtx == nil {
 		t.Fatalf("expected factory to be invoked and capture ctx")
@@ -126,12 +126,12 @@ type failingStartVerticle struct{}
 func (v *failingStartVerticle) Start(ctx FluxorContext) error { return errors.New("start failed") }
 func (v *failingStartVerticle) Stop(ctx FluxorContext) error  { return nil }
 
-func TestVertx_DeployVerticle_FailFast_StartError(t *testing.T) {
+func TestGoCMD_DeployVerticle_FailFast_StartError(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	id, err := vertx.DeployVerticle(&failingStartVerticle{})
+	id, err := gocmd.DeployVerticle(&failingStartVerticle{})
 	if err == nil {
 		t.Fatalf("DeployVerticle() expected error when Start() fails")
 	}

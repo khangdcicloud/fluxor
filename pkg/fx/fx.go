@@ -5,17 +5,30 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	
+
 	"github.com/fluxorio/fluxor/pkg/core"
 )
 
+// JSON is a convenience alias for core.JSON (Dev UX)
+// This allows using fx.JSON instead of core.JSON in fx package
+type JSON = core.JSON
+
+// Error represents an FX framework error
+type Error struct {
+	Message string
+}
+
+func (e *Error) Error() string {
+	return e.Message
+}
+
 // Fluxor is the dependency injection and lifecycle management framework
 type Fluxor struct {
-	vertx      core.Vertx
-	providers  []Provider
-	invokers   []Invoker
-	lifecycle  *lifecycle
-	mu         sync.RWMutex
+	gocmd     core.GoCMD
+	providers []Provider
+	invokers  []Invoker
+	lifecycle *lifecycle
+	mu        sync.RWMutex
 }
 
 // Provider provides a value to the dependency injection container
@@ -32,21 +45,21 @@ type Invoker interface {
 
 // New creates a new Fluxor instance
 func New(ctx context.Context, options ...Option) (*Fluxor, error) {
-	vertx := core.NewVertx(ctx)
-	
+	gocmd := core.NewGoCMD(ctx)
+
 	fx := &Fluxor{
-		vertx:     vertx,
+		gocmd:     gocmd,
 		providers: make([]Provider, 0),
 		invokers:  make([]Invoker, 0),
 		lifecycle: newLifecycle(),
 	}
-	
+
 	for _, opt := range options {
 		if err := opt(fx); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return fx, nil
 }
 
@@ -77,34 +90,34 @@ func Invoke(invoker Invoker) Option {
 func (fx *Fluxor) Start() error {
 	fx.mu.Lock()
 	defer fx.mu.Unlock()
-	
+
 	// Build dependency map
 	deps := make(map[reflect.Type]interface{})
-	
+
 	// Provide all dependencies
 	for _, provider := range fx.providers {
 		value, err := provider.Provide()
 		if err != nil {
 			return fmt.Errorf("provider error: %w", err)
 		}
-		
+
 		valueType := reflect.TypeOf(value)
 		if valueType != nil {
 			deps[valueType] = value
 		}
 	}
-	
-	// Add Vertx to dependencies
-	deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()] = fx.vertx
-	deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()] = fx.vertx.EventBus()
-	
+
+	// Add GoCMD to dependencies
+	deps[reflect.TypeOf((*core.GoCMD)(nil)).Elem()] = fx.gocmd
+	deps[reflect.TypeOf((*core.EventBus)(nil)).Elem()] = fx.gocmd.EventBus()
+
 	// Invoke all invokers
 	for _, invoker := range fx.invokers {
 		if err := invoker.Invoke(deps); err != nil {
 			return fmt.Errorf("invoker error: %w", err)
 		}
 	}
-	
+
 	fx.lifecycle.start()
 	return nil
 }
@@ -113,14 +126,14 @@ func (fx *Fluxor) Start() error {
 func (fx *Fluxor) Stop() error {
 	fx.mu.Lock()
 	defer fx.mu.Unlock()
-	
+
 	fx.lifecycle.stop()
-	return fx.vertx.Close()
+	return fx.gocmd.Close()
 }
 
-// Vertx returns the Vertx instance
-func (fx *Fluxor) Vertx() core.Vertx {
-	return fx.vertx
+// GoCMD returns the GoCMD instance (kept as GoCMD for backward compatibility)
+func (fx *Fluxor) GoCMD() core.GoCMD {
+	return fx.gocmd
 }
 
 // Wait waits for the application to stop
@@ -162,4 +175,3 @@ func (l *lifecycle) wait() error {
 	<-l.stopped
 	return nil
 }
-

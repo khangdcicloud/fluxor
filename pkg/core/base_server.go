@@ -11,8 +11,8 @@ type BaseServer struct {
 	// Name of the server (can be set by subclasses)
 	name string
 
-	// Vertx reference
-	vertx Vertx
+	// GoCMD reference - GoCMD instance
+	gocmd GoCMD
 
 	// State management
 	mu      sync.RWMutex
@@ -30,14 +30,14 @@ type BaseServer struct {
 }
 
 // NewBaseServer creates a new BaseServer
-func NewBaseServer(name string, vertx Vertx) *BaseServer {
-	if vertx == nil {
-		// Fail-fast: vertx cannot be nil
-		panic("vertx cannot be nil")
+func NewBaseServer(name string, gocmd GoCMD) *BaseServer {
+	if gocmd == nil {
+		// Fail-fast: gocmd cannot be nil
+		panic("gocmd cannot be nil")
 	}
 	return &BaseServer{
 		name:   name,
-		vertx:  vertx,
+		gocmd:  gocmd,
 		logger: NewDefaultLogger(),
 	}
 }
@@ -59,7 +59,7 @@ func (bs *BaseServer) Start() error {
 	bs.mu.Lock()
 	if bs.started {
 		bs.mu.Unlock()
-		return &Error{Code: "ALREADY_STARTED", Message: "server already started"}
+		return &EventBusError{Code: "ALREADY_STARTED", Message: "server already started"}
 	}
 	startHook := bs.startHook
 	// Mark started before invoking start hook so IsStarted() reflects runtime state
@@ -125,21 +125,21 @@ func (bs *BaseServer) Name() string {
 	return bs.name
 }
 
-// Vertx returns the Vertx reference
-func (bs *BaseServer) Vertx() Vertx {
+// GoCMD returns the GoCMD reference (kept as GoCMD for backward compatibility)
+func (bs *BaseServer) GoCMD() GoCMD {
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
-	return bs.vertx
+	return bs.gocmd
 }
 
 // EventBus returns the EventBus reference
 func (bs *BaseServer) EventBus() EventBus {
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
-	if bs.vertx == nil {
+	if bs.gocmd == nil {
 		return nil
 	}
-	return bs.vertx.EventBus()
+	return bs.gocmd.EventBus()
 }
 
 // Logger returns the logger instance

@@ -40,10 +40,10 @@ func newInMemoryFastHTTP(t *testing.T, handler fasthttp.RequestHandler) (*fastht
 }
 
 func TestJWTAuthMiddleware_Integration(t *testing.T) {
-	vertx := core.NewVertx(context.Background())
-	defer vertx.Close()
+	gocmd := core.NewGoCMD(context.Background())
+	defer gocmd.Close()
 
-	server := web.NewFastHTTPServer(vertx, web.DefaultFastHTTPServerConfig(":0"))
+	server := web.NewFastHTTPServer(gocmd, web.DefaultFastHTTPServerConfig(":0"))
 	router := server.FastRouter()
 
 	secret := "test-secret"
@@ -62,8 +62,8 @@ func TestJWTAuthMiddleware_Integration(t *testing.T) {
 		reqCtx := &web.FastRequestContext{
 			BaseRequestContext: core.NewBaseRequestContext(),
 			RequestCtx:         rc,
-			Vertx:              vertx,
-			EventBus:           vertx.EventBus(),
+			GoCMD:              gocmd,
+			EventBus:           gocmd.EventBus(),
 			Params:             make(map[string]string),
 		}
 		router.ServeFastHTTP(reqCtx)

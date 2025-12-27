@@ -39,7 +39,7 @@ func (bc *BaseComponent) Start(ctx FluxorContext) error {
 	defer bc.mu.Unlock()
 
 	if bc.started {
-		return &Error{Code: "ALREADY_STARTED", Message: "component already started"}
+		return &EventBusError{Code: "ALREADY_STARTED", Message: "component already started"}
 	}
 
 	// Call hook method
@@ -106,10 +106,10 @@ func (bc *BaseComponent) EventBus() EventBus {
 	return nil
 }
 
-// Vertx returns the Vertx from parent verticle
-func (bc *BaseComponent) Vertx() Vertx {
+// GoCMD returns the GoCMD from parent verticle (kept as GoCMD for backward compatibility)
+func (bc *BaseComponent) GoCMD() GoCMD {
 	if bc.parent != nil {
-		return bc.parent.Vertx()
+		return bc.parent.GoCMD()
 	}
 	return nil
 }

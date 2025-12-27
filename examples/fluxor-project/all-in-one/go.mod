@@ -24,10 +24,6 @@ require (
 )
 
 replace github.com/quadgatefoundation/fluxor/examples/fluxor-project/common => ../common
-
 replace github.com/quadgatefoundation/fluxor/examples/fluxor-project/api-gateway => ../api-gateway
-
 replace github.com/quadgatefoundation/fluxor/examples/fluxor-project/payment-service => ../payment-service
-
-// Use local framework checkout (this repo root)
-replace github.com/fluxorio/fluxor => ../../..
+replace github.com/fluxorio/fluxor => ../../.. // Use local framework checkout (this repo root)

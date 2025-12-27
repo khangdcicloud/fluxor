@@ -7,10 +7,10 @@ import (
 
 func TestNewFluxorContext(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	fluxorCtx := newFluxorContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, gocmd)
 
 	if fluxorCtx == nil {
 		t.Error("newFluxorContext() should not return nil")
@@ -20,8 +20,8 @@ func TestNewFluxorContext(t *testing.T) {
 		t.Error("Context() should not return nil")
 	}
 
-	if fluxorCtx.Vertx() == nil {
-		t.Error("Vertx() should not return nil")
+	if fluxorCtx.GoCMD() == nil {
+		t.Error("GoCMD() should not return nil")
 	}
 
 	if fluxorCtx.EventBus() == nil {
@@ -31,10 +31,10 @@ func TestNewFluxorContext(t *testing.T) {
 
 func TestFluxorContext_Config(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	fluxorCtx := newFluxorContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, gocmd)
 
 	// Test setting config
 	fluxorCtx.SetConfig("key1", "value1")
@@ -52,10 +52,10 @@ func TestFluxorContext_Config(t *testing.T) {
 
 func TestFluxorContext_Deploy(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	fluxorCtx := newFluxorContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, gocmd)
 
 	verticle := &testVerticle{}
 	deploymentID, err := fluxorCtx.Deploy(verticle)
@@ -75,10 +75,10 @@ func TestFluxorContext_Deploy(t *testing.T) {
 
 func TestFluxorContext_Undeploy(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	defer vertx.Close()
+	gocmd := NewGoCMD(ctx)
+	defer gocmd.Close()
 
-	fluxorCtx := newFluxorContext(ctx, vertx)
+	fluxorCtx := newFluxorContext(ctx, gocmd)
 
 	verticle := &testVerticle{}
 	deploymentID, err := fluxorCtx.Deploy(verticle)

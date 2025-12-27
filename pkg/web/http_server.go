@@ -17,11 +17,11 @@ type httpServer struct {
 }
 
 // NewServer creates a new HTTP server
-func NewServer(vertx core.Vertx, addr string) Server {
+func NewServer(gocmd core.GoCMD, addr string) Server {
 	r := NewRouter().(*router)
 
 	s := &httpServer{
-		BaseServer: core.NewBaseServer("http-server", vertx),
+		BaseServer: core.NewBaseServer("http-server", gocmd),
 		router:     r,
 		httpServer: &http.Server{
 			Addr:              addr,
@@ -35,7 +35,7 @@ func NewServer(vertx core.Vertx, addr string) Server {
 
 // doStart is called by BaseServer.Start() - implements hook method
 func (s *httpServer) doStart() error {
-	// Inject Vertx and EventBus into router handlers
+	// Inject GoCMD and EventBus into router handlers
 	// This is done by wrapping the router's ServeHTTP
 
 	return s.httpServer.ListenAndServe()
@@ -51,8 +51,8 @@ func (s *httpServer) Router() Router {
 	return s.router
 }
 
-// InjectVertx injects Vertx and EventBus into request context
-func (s *httpServer) InjectVertx(ctx *RequestContext) {
-	ctx.Vertx = s.Vertx()
+// InjectGoCMD injects GoCMD and EventBus into request context
+func (s *httpServer) InjectGoCMD(ctx *RequestContext) {
+	ctx.GoCMD = s.GoCMD()
 	ctx.EventBus = s.EventBus()
 }

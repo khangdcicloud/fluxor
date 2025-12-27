@@ -8,8 +8,8 @@ import (
 
 func TestEventBus_Publish(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	eb := vertx.EventBus()
+	gocmd := NewGoCMD(ctx)
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Test fail-fast: empty address
@@ -33,8 +33,8 @@ func TestEventBus_Publish(t *testing.T) {
 
 func TestEventBus_Send(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	eb := vertx.EventBus()
+	gocmd := NewGoCMD(ctx)
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Test fail-fast: empty address
@@ -54,7 +54,7 @@ func TestEventBus_Send(t *testing.T) {
 	if err == nil {
 		t.Error("Send() with no handlers should fail")
 	}
-	if ce, ok := err.(*Error); ok {
+	if ce, ok := err.(*EventBusError); ok {
 		if ce.Code != "NO_HANDLERS" {
 			t.Fatalf("Send() error code = %q, want %q", ce.Code, "NO_HANDLERS")
 		}
@@ -84,8 +84,8 @@ func TestEventBus_Send(t *testing.T) {
 
 func TestEventBus_Request(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	eb := vertx.EventBus()
+	gocmd := NewGoCMD(ctx)
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Test fail-fast: invalid timeout
@@ -111,7 +111,7 @@ func TestEventBus_Request(t *testing.T) {
 	if err == nil {
 		t.Error("Request() with no handlers should fail")
 	}
-	if ce, ok := err.(*Error); ok {
+	if ce, ok := err.(*EventBusError); ok {
 		if ce.Code != "NO_HANDLERS" {
 			t.Fatalf("Request() error code = %q, want %q", ce.Code, "NO_HANDLERS")
 		}
@@ -135,8 +135,8 @@ func TestEventBus_Request(t *testing.T) {
 
 func TestEventBus_Consumer(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	eb := vertx.EventBus()
+	gocmd := NewGoCMD(ctx)
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	// Test fail-fast: empty address should panic
@@ -151,8 +151,8 @@ func TestEventBus_Consumer(t *testing.T) {
 
 func TestConsumer_Handler_FailFast_NilHandlerPanics(t *testing.T) {
 	ctx := context.Background()
-	vertx := NewVertx(ctx)
-	eb := vertx.EventBus()
+	gocmd := NewGoCMD(ctx)
+	eb := gocmd.EventBus()
 	defer eb.Close()
 
 	c := eb.Consumer("test.address")

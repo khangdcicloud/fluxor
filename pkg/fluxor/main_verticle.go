@@ -17,7 +17,7 @@ type MainVerticle struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	vertx core.Vertx
+	gocmd core.GoCMD
 
 	cfg map[string]any
 
@@ -31,11 +31,11 @@ type MainVerticleOptions struct {
 	// (e.g., NATS) while still using the "main-like" bootstrap API.
 	//
 	// cfg is the loaded config map (json/yaml). Treat as read-only by convention.
-	EventBusFactory func(ctx context.Context, vertx core.Vertx, cfg map[string]any) (core.EventBus, error)
+	EventBusFactory func(ctx context.Context, gocmd core.GoCMD, cfg map[string]any) (core.EventBus, error)
 
-	// VertxOptions are passed to core.NewVertxWithOptions. If EventBusFactory is set,
-	// it takes precedence over VertxOptions.EventBusFactory.
-	VertxOptions core.VertxOptions
+	// GoCMDOptions are passed to core.NewGoCMDWithOptions. If EventBusFactory is set,
+	// it takes precedence over GoCMDOptions.EventBusFactory.
+	GoCMDOptions core.GoCMDOptions
 }
 
 // NewMainVerticle loads config from path (json/yaml) and creates an app runtime.
@@ -44,7 +44,7 @@ func NewMainVerticle(configPath string) (*MainVerticle, error) {
 	return NewMainVerticleWithOptions(configPath, MainVerticleOptions{})
 }
 
-// NewMainVerticleWithOptions is like NewMainVerticle but allows customizing the underlying Vertx/EventBus.
+// NewMainVerticleWithOptions is like NewMainVerticle but allows customizing the underlying GoCMD/EventBus.
 func NewMainVerticleWithOptions(configPath string, opts MainVerticleOptions) (*MainVerticle, error) {
 	rootCtx, cancel := context.WithCancel(context.Background())
 
@@ -56,14 +56,14 @@ func NewMainVerticleWithOptions(configPath string, opts MainVerticleOptions) (*M
 		}
 	}
 
-	vopts := opts.VertxOptions
+	vopts := opts.GoCMDOptions
 	if opts.EventBusFactory != nil {
-		vopts.EventBusFactory = func(ctx context.Context, vertx core.Vertx) (core.EventBus, error) {
-			return opts.EventBusFactory(ctx, vertx, cfg)
+		vopts.EventBusFactory = func(ctx context.Context, gocmd core.GoCMD) (core.EventBus, error) {
+			return opts.EventBusFactory(ctx, gocmd, cfg)
 		}
 	}
 
-	vx, err := core.NewVertxWithOptions(rootCtx, vopts)
+	vx, err := core.NewGoCMDWithOptions(rootCtx, vopts)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -72,13 +72,13 @@ func NewMainVerticleWithOptions(configPath string, opts MainVerticleOptions) (*M
 	return &MainVerticle{
 		ctx:    rootCtx,
 		cancel: cancel,
-		vertx:  vx,
+		gocmd:  vx,
 		cfg:    cfg,
 	}, nil
 }
 
-// Vertx returns the underlying Vertx (advanced usage).
-func (m *MainVerticle) Vertx() core.Vertx { return m.vertx }
+// GoCMD returns the underlying GoCMD (advanced usage).
+func (m *MainVerticle) GoCMD() core.GoCMD { return m.gocmd }
 
 // Config returns the loaded config map (read-only by convention).
 func (m *MainVerticle) Config() map[string]any { return m.cfg }
@@ -86,7 +86,7 @@ func (m *MainVerticle) Config() map[string]any { return m.cfg }
 // DeployVerticle deploys a verticle after injecting global config into its FluxorContext.
 func (m *MainVerticle) DeployVerticle(v core.Verticle) (string, error) {
 	if v == nil {
-		return "", &core.Error{Code: "INVALID_INPUT", Message: "verticle cannot be nil"}
+		return "", &core.EventBusError{Code: "INVALID_INPUT", Message: "verticle cannot be nil"}
 	}
 
 	var wrapped core.Verticle
@@ -96,7 +96,7 @@ func (m *MainVerticle) DeployVerticle(v core.Verticle) (string, error) {
 		wrapped = &configInjectedVerticle{inner: v, cfg: m.cfg}
 	}
 
-	id, err := m.vertx.DeployVerticle(wrapped)
+	id, err := m.gocmd.DeployVerticle(wrapped)
 	if err != nil {
 		return "", err
 	}
@@ -118,10 +118,10 @@ func (m *MainVerticle) Start() error {
 	return m.Stop()
 }
 
-// Stop gracefully shuts down: cancels root context and closes Vertx (undeploys verticles).
+// Stop gracefully shuts down: cancels root context and closes GoCMD (undeploys verticles).
 func (m *MainVerticle) Stop() error {
 	m.cancel()
-	return m.vertx.Close()
+	return m.gocmd.Close()
 }
 
 // configInjectedVerticle injects the app config into the FluxorContext before calling Start/Stop.

@@ -213,7 +213,7 @@ func (e *Engine) executeNode(ctx context.Context, def *WorkflowDefinition, node 
 	nodeType := NodeType(node.Type)
 	handler, ok := e.registry.Get(nodeType)
 	if !ok {
-		e.logger.Errorf("unknown node type: %s", node.Type)
+		e.logger.Error(fmt.Sprintf("unknown node type: %s", node.Type))
 		e.recordError(execCtx, node.ID, fmt.Sprintf("unknown node type: %s", node.Type))
 		return
 	}

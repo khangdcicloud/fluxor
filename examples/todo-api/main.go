@@ -103,7 +103,7 @@ func main() {
 
 func setupApplication(database *sql.DB, jwtSecret string) func(map[reflect.Type]interface{}) error {
 	return func(deps map[reflect.Type]interface{}) error {
-		vertx := deps[reflect.TypeOf((*core.Vertx)(nil)).Elem()].(core.Vertx)
+		vertx := deps[reflect.TypeOf((*core.GoCMD)(nil)).Elem()].(core.GoCMD)
 
 		// Create services
 		userService := services.NewUserService(database)

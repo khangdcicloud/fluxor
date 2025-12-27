@@ -14,11 +14,11 @@ import (
 // MasterVerticle acts as a load balancer and gateway
 type MasterVerticle struct {
 	*core.BaseVerticle
-	
+
 	workerIDs []string
 	counter   uint64
-	
-	httpServer *web.FastHTTPServer
+
+	httpServer  *web.FastHTTPServer
 	tcpListener net.Listener
 	logger      core.Logger
 }
@@ -55,8 +55,8 @@ func (v *MasterVerticle) doStop(ctx core.FluxorContext) error {
 
 func (v *MasterVerticle) startHTTPServer(ctx core.FluxorContext) {
 	cfg := web.DefaultFastHTTPServerConfig(":8080")
-	v.httpServer = web.NewFastHTTPServer(ctx.Vertx(), cfg)
-	
+	v.httpServer = web.NewFastHTTPServer(ctx.GoCMD(), cfg)
+
 	r := v.httpServer.FastRouter()
 	r.GETFast("/process", func(c *web.FastRequestContext) error {
 		payload := c.Query("data")
@@ -66,7 +66,7 @@ func (v *MasterVerticle) startHTTPServer(ctx core.FluxorContext) {
 
 		// Load Balance
 		workerAddr := v.nextWorkerAddress()
-		
+
 		req := contracts.WorkRequest{
 			ID:      fmt.Sprintf("http-%d", time.Now().UnixNano()),
 			Payload: payload,
@@ -80,13 +80,13 @@ func (v *MasterVerticle) startHTTPServer(ctx core.FluxorContext) {
 
 		var resp contracts.WorkResponse
 		_ = reply.DecodeBody(&resp)
-		
+
 		return c.JSON(200, resp)
 	})
 
 	go func() {
 		if err := v.httpServer.Start(); err != nil {
-			v.logger.Errorf("HTTP Server failed: %v", err)
+			v.logger.Error(fmt.Sprintf("HTTP Server failed: %v", err))
 		}
 	}()
 	v.logger.Info("HTTP Server listening on :8080")
@@ -96,11 +96,11 @@ func (v *MasterVerticle) startTCPServer(ctx core.FluxorContext) {
 	addr := ":9090"
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		v.logger.Errorf("TCP listen failed: %v", err)
+		v.logger.Error(fmt.Sprintf("TCP listen failed: %v", err))
 		return
 	}
 	v.tcpListener = l
-	v.logger.Infof("TCP Server listening on %s", addr)
+	v.logger.Info(fmt.Sprintf("TCP Server listening on %s", addr))
 
 	for {
 		conn, err := l.Accept()
@@ -113,19 +113,19 @@ func (v *MasterVerticle) startTCPServer(ctx core.FluxorContext) {
 
 func (v *MasterVerticle) handleTCPConnection(ctx core.FluxorContext, conn net.Conn) {
 	defer conn.Close()
-	
+
 	// Simple protocol: Read line -> Process -> Write line
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return
 	}
-	
+
 	payload := string(buf[:n])
-	
+
 	// Load Balance
 	workerAddr := v.nextWorkerAddress()
-	
+
 	req := contracts.WorkRequest{
 		ID:      fmt.Sprintf("tcp-%d", time.Now().UnixNano()),
 		Payload: payload,
@@ -140,7 +140,7 @@ func (v *MasterVerticle) handleTCPConnection(ctx core.FluxorContext, conn net.Co
 
 	var resp contracts.WorkResponse
 	_ = reply.DecodeBody(&resp)
-	
+
 	conn.Write([]byte(fmt.Sprintf("Processed by %s: %s\n", resp.Worker, resp.Result)))
 }
 

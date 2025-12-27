@@ -2,6 +2,7 @@ package concurrency
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -89,7 +90,10 @@ func (wp *defaultWorkerPool) worker(id int) {
 
 			// Execute task
 			if err := task.Execute(wp.ctx); err != nil {
-				wp.logger.Errorf("worker %d: task %s failed: %v", id, task.Name(), err)
+				// Don't log context.Canceled - it's expected during shutdown
+				if !errors.Is(err, context.Canceled) {
+					wp.logger.Errorf("worker %d: task %s failed: %v", id, task.Name(), err)
+				}
 			}
 
 		case <-wp.ctx.Done():

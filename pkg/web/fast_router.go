@@ -46,7 +46,8 @@ func (r *FastRouter) ServeFastHTTP(ctx *FastRequestContext) {
 	path := string(ctx.Path())
 
 	for _, route := range r.routes {
-		if route.method == method && r.matchPath(route.path, path) {
+		matched := route.method == method && r.matchPath(route.path, path)
+		if matched {
 			// Extract params
 			r.extractParams(route.path, path, ctx.Params)
 
@@ -62,9 +63,7 @@ func (r *FastRouter) ServeFastHTTP(ctx *FastRequestContext) {
 
 			// Execute handler
 			if err := handler(ctx); err != nil {
-				// Log error with request ID for tracing
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-				// Error will be counted in processRequest
 			}
 			return
 		}
@@ -165,7 +164,7 @@ func (r *FastRouter) Route(method, path string, handler RequestHandler) {
 			BaseRequestContext: core.NewBaseRequestContext(),
 			Request:            nil,
 			Response:           nil,
-			Vertx:              ctx.Vertx,
+			GoCMD:              ctx.GoCMD,
 			EventBus:           ctx.EventBus,
 			Params:             ctx.Params,
 		}
@@ -183,7 +182,7 @@ func (r *FastRouter) Use(middleware Middleware) {
 				BaseRequestContext: core.NewBaseRequestContext(),
 				Request:            nil,
 				Response:           nil,
-				Vertx:              ctx.Vertx,
+				GoCMD:              ctx.GoCMD,
 				EventBus:           ctx.EventBus,
 				Params:             ctx.Params,
 			}
