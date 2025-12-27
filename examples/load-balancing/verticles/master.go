@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,6 +25,7 @@ type MasterVerticle struct {
 	tcpAddr      string
 	httpVerticle *web.HttpVerticle
 	tcpServer    *tcp.TCPServer
+	tcpServerMu  sync.RWMutex // Protects tcpServer field access
 	logger       core.Logger
 }
 
@@ -76,8 +78,11 @@ func (v *MasterVerticle) doStop(ctx core.FluxorContext) error {
 	if v.httpVerticle != nil {
 		_ = v.httpVerticle.Stop(ctx)
 	}
-	if v.tcpServer != nil {
-		_ = v.tcpServer.Stop()
+	v.tcpServerMu.RLock()
+	tcpSrv := v.tcpServer
+	v.tcpServerMu.RUnlock()
+	if tcpSrv != nil {
+		_ = tcpSrv.Stop()
 	}
 	return nil
 }
@@ -120,8 +125,11 @@ func (v *MasterVerticle) startHTTPVerticle(ctx core.FluxorContext) error {
 		}
 
 		m := tcp.ServerMetrics{}
-		if v.tcpServer != nil {
-			m = v.tcpServer.Metrics()
+		v.tcpServerMu.RLock()
+		tcpSrv := v.tcpServer
+		v.tcpServerMu.RUnlock()
+		if tcpSrv != nil {
+			m = tcpSrv.Metrics()
 		}
 		return c.JSON(200, status{
 			Role:     "master",
@@ -139,9 +147,9 @@ func (v *MasterVerticle) startHTTPVerticle(ctx core.FluxorContext) error {
 
 func (v *MasterVerticle) startTCPServer(ctx core.FluxorContext) {
 	cfg := tcp.DefaultTCPServerConfig(v.tcpAddr)
-	v.tcpServer = tcp.NewTCPServer(ctx.GoCMD(), cfg)
+	tcpSrv := tcp.NewTCPServer(ctx.GoCMD(), cfg)
 
-	v.tcpServer.SetHandler(func(c *tcp.ConnContext) error {
+	tcpSrv.SetHandler(func(c *tcp.ConnContext) error {
 		// Simple protocol: one line in, one line out.
 		rd := bufio.NewReader(c.Conn)
 		line, err := rd.ReadBytes('\n')
@@ -179,15 +187,24 @@ func (v *MasterVerticle) startTCPServer(ctx core.FluxorContext) {
 		return nil
 	})
 
+	// Set tcpServer field before starting goroutine to avoid race conditions
+	v.tcpServerMu.Lock()
+	v.tcpServer = tcpSrv
+	v.tcpServerMu.Unlock()
+
 	go func() {
 		v.logger.Info(fmt.Sprintf("TCP Server listening on %s", v.tcpAddr))
-		if err := v.tcpServer.Start(); err != nil {
+		if err := tcpSrv.Start(); err != nil {
 			v.logger.Error(fmt.Sprintf("TCP Server failed: %v", err))
 		}
 	}()
 }
 
 func (v *MasterVerticle) nextWorkerAddress() string {
+	if len(v.workerIDs) == 0 {
+		// Fail-fast: return empty address if no workers
+		return ""
+	}
 	idx := atomic.AddUint64(&v.counter, 1) % uint64(len(v.workerIDs))
 	workerID := v.workerIDs[idx]
 	return fmt.Sprintf("%s.%s", contracts.WorkerAddress, workerID)

@@ -150,6 +150,11 @@ func TestMasterVerticle_doStart_DefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployVerticle failed: %v", err)
 	}
+	defer func() {
+		_ = gocmd.UndeployVerticle(deploymentID)
+		// Give time for cleanup
+		time.Sleep(100 * time.Millisecond)
+	}()
 
 	// Wait for verticle to start (doStart is called asynchronously)
 	deadline := time.Now().Add(2 * time.Second)
@@ -168,9 +173,6 @@ func TestMasterVerticle_doStart_DefaultConfig(t *testing.T) {
 	if master.tcpAddr == "" {
 		master.tcpAddr = ":9090" // Default if not set
 	}
-
-	// Cleanup
-	_ = gocmd.UndeployVerticle(deploymentID)
 }
 
 func TestMasterVerticle_doStart_CustomConfig(t *testing.T) {
@@ -189,6 +191,11 @@ func TestMasterVerticle_doStart_CustomConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployVerticle failed: %v", err)
 	}
+	defer func() {
+		_ = gocmd.UndeployVerticle(deploymentID)
+		// Give time for cleanup
+		time.Sleep(100 * time.Millisecond)
+	}()
 
 	// Wait for verticle to start
 	deadline := time.Now().Add(2 * time.Second)
@@ -207,9 +214,6 @@ func TestMasterVerticle_doStart_CustomConfig(t *testing.T) {
 	if master.tcpAddr == "" {
 		master.tcpAddr = ":9090" // Default
 	}
-
-	// Cleanup
-	_ = gocmd.UndeployVerticle(deploymentID)
 }
 
 func TestMasterVerticle_doStop(t *testing.T) {
@@ -233,6 +237,9 @@ func TestMasterVerticle_doStop(t *testing.T) {
 	if err != nil {
 		t.Errorf("UndeployVerticle failed: %v", err)
 	}
+
+	// Give time for cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestWorkerVerticle_doStart(t *testing.T) {
@@ -456,7 +463,10 @@ func TestMasterVerticle_HTTPHandler_Status(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployVerticle failed: %v", err)
 	}
-	defer gocmd.UndeployVerticle(masterDeploymentID)
+	defer func() {
+		_ = gocmd.UndeployVerticle(masterDeploymentID)
+		time.Sleep(100 * time.Millisecond)
+	}()
 
 	// Wait for master to start
 	deadline := time.Now().Add(2 * time.Second)
@@ -615,16 +625,11 @@ func TestMasterVerticle_startTCPServer(t *testing.T) {
 func TestMasterVerticle_nextWorkerAddress_EmptyWorkers(t *testing.T) {
 	master := NewMasterVerticle([]string{})
 
-	// This should panic or handle gracefully
-	// Let's test that it doesn't crash
-	defer func() {
-		if r := recover(); r != nil {
-			// Panic is acceptable for empty workers
-		}
-	}()
-
-	_ = master.nextWorkerAddress()
-	// If we get here without panic, that's also acceptable
+	// This should return empty string for empty workers (fail-fast behavior)
+	addr := master.nextWorkerAddress()
+	if addr != "" {
+		t.Errorf("Expected empty address for empty workers, got %s", addr)
+	}
 }
 
 func TestMasterVerticle_doStart_ConfigTypes(t *testing.T) {
