@@ -60,18 +60,49 @@ type GoCMDOptions struct {
 }
 
 // DeploymentState represents the lifecycle state of a deployed verticle.
+//
+// This acts as a state machine with the following states and valid transitions:
+//
+//	State Machine Diagram:
+//
+//	PENDING (initial state)
+//	  ├─> STARTED (on successful Start())
+//	  ├─> FAILED (on failed Start())
+//	  └─> STOPPING (during shutdown/Close())
+//
+//	STARTED
+//	  └─> STOPPING (on UndeployVerticle())
+//
+//	STOPPING
+//	  └─> STOPPED (after Stop() completes)
+//
+//	FAILED (terminal state - removed from map)
+//	STOPPED (terminal state)
+//
+// Invalid transitions are prevented by validation checks.
 type DeploymentState int
 
 const (
-	// DeploymentStatePending indicates the verticle is being started (AsyncVerticle only)
+	// DeploymentStatePending is the initial state when a verticle is being deployed.
+	// Transitions: STARTED (success), FAILED (failure), or STOPPING (shutdown)
 	DeploymentStatePending DeploymentState = iota
-	// DeploymentStateStarted indicates the verticle has successfully started
+
+	// DeploymentStateStarted indicates the verticle has successfully started and is running.
+	// Transitions: STOPPING (on undeploy)
 	DeploymentStateStarted
-	// DeploymentStateFailed indicates the verticle failed to start (AsyncVerticle only)
+
+	// DeploymentStateFailed indicates the verticle failed to start.
+	// This is a terminal state - the deployment is removed from the map.
+	// No further transitions allowed.
 	DeploymentStateFailed
-	// DeploymentStateStopping indicates the verticle is being stopped
+
+	// DeploymentStateStopping indicates the verticle is being stopped.
+	// Transitions: STOPPED (after Stop() completes)
 	DeploymentStateStopping
-	// DeploymentStateStopped indicates the verticle has been stopped
+
+	// DeploymentStateStopped indicates the verticle has been stopped.
+	// This is a terminal state.
+	// No further transitions allowed.
 	DeploymentStateStopped
 )
 
@@ -141,7 +172,8 @@ func (g *gocmd) DeployVerticle(verticle Verticle) (string, error) {
 	// Single Start() method - no need for AsyncStart
 	go func() {
 		if err := verticle.Start(fluxorCtx); err != nil {
-			// Remove from map on failure
+			// State machine transition: PENDING -> FAILED
+			// Remove from map on failure (FAILED is terminal state)
 			g.mu.Lock()
 			dep.state = DeploymentStateFailed
 			delete(g.deployments, deploymentID)
@@ -150,13 +182,34 @@ func (g *gocmd) DeployVerticle(verticle Verticle) (string, error) {
 			return
 		}
 
-		// Mark as started on success
+		// State machine transition: PENDING -> STARTED
 		g.mu.Lock()
 		dep.state = DeploymentStateStarted
 		g.mu.Unlock()
 	}()
 
 	return deploymentID, nil
+}
+
+// canTransitionToStopping validates if a deployment can transition to STOPPING state.
+// State machine validation: only PENDING (during shutdown) or STARTED can transition to STOPPING.
+func canTransitionToStopping(state DeploymentState, isShuttingDown bool) bool {
+	switch state {
+	case DeploymentStatePending:
+		// PENDING -> STOPPING only allowed during shutdown
+		return isShuttingDown
+	case DeploymentStateStarted:
+		// STARTED -> STOPPING is always valid
+		return true
+	case DeploymentStateStopping, DeploymentStateStopped:
+		// Already stopping/stopped - invalid transition
+		return false
+	case DeploymentStateFailed:
+		// FAILED is terminal - cannot transition
+		return false
+	default:
+		return false
+	}
 }
 
 func (g *gocmd) UndeployVerticle(deploymentID string) error {
@@ -172,7 +225,7 @@ func (g *gocmd) UndeployVerticle(deploymentID string) error {
 		return &EventBusError{Code: "DEPLOYMENT_NOT_FOUND", Message: "Deployment not found: " + deploymentID}
 	}
 
-	// Check if deployment is in a valid state for undeploy
+	// State machine validation: check if deployment can transition to STOPPING
 	// Allow undeploying PENDING deployments during shutdown (Close())
 	isShuttingDown := false
 	select {
@@ -181,15 +234,22 @@ func (g *gocmd) UndeployVerticle(deploymentID string) error {
 	default:
 	}
 
-	if dep.state == DeploymentStatePending && !isShuttingDown {
+	if !canTransitionToStopping(dep.state, isShuttingDown) {
 		g.mu.Unlock()
-		return &EventBusError{Code: "DEPLOYMENT_PENDING", Message: "Cannot undeploy pending deployment: " + deploymentID}
-	}
-	if dep.state == DeploymentStateStopping || dep.state == DeploymentStateStopped {
-		g.mu.Unlock()
-		return &EventBusError{Code: "DEPLOYMENT_ALREADY_STOPPING", Message: "Deployment already stopping/stopped: " + deploymentID}
+		// Return backward-compatible error codes for state machine validation
+		switch dep.state {
+		case DeploymentStatePending:
+			return &EventBusError{Code: "DEPLOYMENT_PENDING", Message: "Cannot undeploy pending deployment: " + deploymentID}
+		case DeploymentStateStopping, DeploymentStateStopped:
+			return &EventBusError{Code: "DEPLOYMENT_ALREADY_STOPPING", Message: "Deployment already stopping/stopped: " + deploymentID}
+		case DeploymentStateFailed:
+			return &EventBusError{Code: "DEPLOYMENT_ALREADY_FAILED", Message: "Deployment already failed: " + deploymentID}
+		default:
+			return &EventBusError{Code: "INVALID_STATE_TRANSITION", Message: "Invalid state for undeploy: " + deploymentID}
+		}
 	}
 
+	// Valid state transition: -> STOPPING
 	dep.state = DeploymentStateStopping
 	delete(g.deployments, deploymentID)
 	g.mu.Unlock()
@@ -200,6 +260,7 @@ func (g *gocmd) UndeployVerticle(deploymentID string) error {
 		if err := dep.verticle.Stop(dep.fluxorCtx); err != nil {
 			g.logger.Error(fmt.Sprintf("verticle stop failed for deployment %s: %v", deploymentID, err))
 		}
+		// State machine transition: STOPPING -> STOPPED (terminal state)
 		dep.state = DeploymentStateStopped
 	}()
 
@@ -249,13 +310,17 @@ func (g *gocmd) Close() error {
 		stopWg.Add(1)
 		go func(d *deployment, id string) {
 			defer stopWg.Done()
+			// State machine transition: PENDING/STARTED -> STOPPING
 			// Mark as stopping and remove from map (need lock for this)
 			g.mu.Lock()
 			if d.state == DeploymentStatePending {
+				// PENDING -> STOPPING (allowed during shutdown)
 				d.state = DeploymentStateStopping
-			} else if d.state != DeploymentStateStopping && d.state != DeploymentStateStopped {
+			} else if d.state == DeploymentStateStarted {
+				// STARTED -> STOPPING (valid transition)
 				d.state = DeploymentStateStopping
 			}
+			// Skip if already STOPPING or STOPPED (terminal states)
 			// Only delete if still in map (may have been deleted already)
 			if _, exists := g.deployments[id]; exists {
 				delete(g.deployments, id)
@@ -266,6 +331,7 @@ func (g *gocmd) Close() error {
 			if err := d.verticle.Stop(d.fluxorCtx); err != nil {
 				g.logger.Error(fmt.Sprintf("verticle stop failed for deployment %s: %v", id, err))
 			}
+			// State machine transition: STOPPING -> STOPPED (terminal state)
 			d.state = DeploymentStateStopped
 		}(dep, dep.id)
 	}
