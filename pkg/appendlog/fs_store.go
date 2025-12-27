@@ -169,10 +169,14 @@ func (s *fsStore) Append(data []byte) (Offset, error) {
 		s.cfg.Observer.OnAppendRejected(RejectInfo{Bytes: 0, Reason: ErrInvalidData})
 		return 0, ErrInvalidData
 	}
+	
+	// Check closed state and capture channel atomically
 	s.mu.RLock()
 	closed := s.closed
+	ch := s.appendCh
 	s.mu.RUnlock()
-	if closed {
+	
+	if closed || ch == nil {
 		s.cfg.Observer.OnAppendRejected(RejectInfo{Bytes: len(data), Reason: ErrClosed})
 		return 0, ErrClosed
 	}
@@ -201,8 +205,9 @@ func (s *fsStore) Append(data []byte) (Offset, error) {
 	}
 
 	// Non-blocking enqueue: if channel is full, fail-fast.
+	// Use captured channel to avoid race with Close()
 	select {
-	case s.appendCh <- req:
+	case ch <- req:
 		atomic.AddInt64(&s.appendedRecords, 1)
 		s.cfg.Observer.OnAppendEnqueued(AppendInfo{Offset: offset, Bytes: len(req.data)})
 	default:
@@ -316,11 +321,15 @@ func (s *fsStore) Close() error {
 	s.appendCh = nil
 	s.mu.Unlock()
 
+	// Close channel to signal flushLoop to stop
 	if ch != nil {
 		close(ch)
 	}
+	
+	// Wait for flushLoop to finish processing remaining requests
 	s.flushWg.Wait()
 
+	// Now safe to flush and close files (no concurrent access)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.activeBuf != nil {
@@ -344,8 +353,19 @@ func (s *fsStore) Stats() Stats {
 func (s *fsStore) flushLoop() {
 	defer s.flushWg.Done()
 
+	// Capture appendCh once to avoid race condition with Close()
+	// We hold the reference to the original channel even if Close() sets s.appendCh to nil
+	s.mu.RLock()
+	ch := s.appendCh
+	s.mu.RUnlock()
+
+	if ch == nil {
+		return
+	}
+
 	// Drain append requests and persist them in order.
-	for req := range s.appendCh {
+	// Loop will exit when channel is closed by Close()
+	for req := range ch {
 		start := time.Now()
 		err := s.appendToDisk(req.offset, req.data)
 		s.cfg.Observer.OnAppendPersisted(PersistInfo{
@@ -356,7 +376,12 @@ func (s *fsStore) flushLoop() {
 		})
 		atomic.AddInt64(&s.bufferedBytes, -int64(len(req.data)))
 		if s.cfg.Durability == DurabilityFsync {
-			req.ackCh <- err
+			// Send ack after persisting (non-blocking with buffered channel)
+			select {
+			case req.ackCh <- err:
+			default:
+				// Channel full or closed - best effort
+			}
 		}
 	}
 }
